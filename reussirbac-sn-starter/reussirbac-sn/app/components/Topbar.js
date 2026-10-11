@@ -26,4 +26,3 @@ export default function Topbar({ crumbs = [], action = null }) {
     </div>
   );
 }
-
