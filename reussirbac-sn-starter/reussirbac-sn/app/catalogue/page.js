@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
+import { TYPES } from '../../lib/media';
 
 export default function CataloguePage() {
   const [niveaux, setNiveaux] = useState([]);
@@ -37,10 +39,15 @@ export default function CataloguePage() {
       setLoading(true);
       const { data } = await supabase
         .from('chapitres')
-        .select('*, ressources(*)')
+        .select('*, ressources(id, type, statut)')
         .eq('matiere_id', matiereId)
-        .order('ordre');
-      setChapitres(data || []);
+        .order('ordre')
+        .order('nom');
+      // On n'affiche que les chapitres qui ont au moins une ressource publiée
+      const avecContenu = (data || [])
+        .map((ch) => ({ ...ch, publiees: (ch.ressources || []).filter((r) => r.statut === 'publie') }))
+        .filter((ch) => ch.publiees.length > 0);
+      setChapitres(avecContenu);
       setLoading(false);
     }
     loadChapitres();
@@ -73,20 +80,23 @@ export default function CataloguePage() {
       )}
 
       {chapitres.map((ch) => (
-        <div key={ch.id} className="chapter-card">
-          <strong style={{ fontSize: 15 }}>{ch.nom}</strong>
-          <div className="meta">
-            {ch.ressources.length} ressource{ch.ressources.length > 1 ? 's' : ''}
+        <Link key={ch.id} href={`/chapitre/${ch.id}`} className="chapter-link">
+          <div className="row">
+            <span className="name">{ch.nom}</span>
+            <span className="chev">›</span>
           </div>
-          {ch.ressources.map((r) => (
-            <div key={r.id} className="resource-row">
-              <span>{r.source === 'pdf' ? '📄' : '🎥'} {r.titre}</span>
-              <a href={r.source === 'pdf' ? r.url_fichier : r.url_video} target="_blank" rel="noreferrer">
-                Ouvrir
-              </a>
-            </div>
-          ))}
-        </div>
+          <div className="chips">
+            {TYPES.map((t) => {
+              const n = ch.publiees.filter((r) => r.type === t.key).length;
+              if (!n) return null;
+              return (
+                <span className="chip" key={t.key}>
+                  {t.icon} {n} {n > 1 ? t.plural.toLowerCase() : t.label.toLowerCase()}
+                </span>
+              );
+            })}
+          </div>
+        </Link>
       ))}
     </main>
   );
