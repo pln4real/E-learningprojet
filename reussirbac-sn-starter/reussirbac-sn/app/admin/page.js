@@ -88,7 +88,11 @@ export default function AdminPage() {
 
     let urlFichier = null;
     if (source === 'pdf' && file) {
-      const path = `${Date.now()}-${file.name}`;
+      const safeName = file.name
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-zA-Z0-9._-]/g, '_');
+const path = `${Date.now()}-${safeName}`;
       const { error: errUpload } = await supabase.storage.from('ressources').upload(path, file);
       if (errUpload) { setIsError(true); setMessage('Erreur upload : ' + errUpload.message); return; }
       const { data: urlData } = supabase.storage.from('ressources').getPublicUrl(path);
