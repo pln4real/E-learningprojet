@@ -26,7 +26,7 @@ a { color: inherit; }
 label { display: block; font-size: 12px; color: var(--ink-soft); margin-bottom: 6px; font-weight: 600; }
 .field { margin-bottom: 14px; }
 
-input[type="text"], input[type="tel"], input[type="email"], input[type="password"], textarea, select {
+input:not([type]), input[type="text"], input[type="tel"], input[type="email"], input[type="password"], textarea, select {
   width: 100%; border: 1px solid var(--line); border-radius: 9px; background: var(--bg);
   color: var(--ink); font-family: 'Work Sans', sans-serif; font-size: 14.5px; padding: 11px 13px;
   transition: border-color .15s, box-shadow .15s;
