@@ -111,3 +111,4 @@ si quelqu'un essayait de contourner l'interface directement.
   directement depuis l'espace Admin une fois en ligne.
 - Gérer le cas "aucun e-mail confirmé" / page d'inscription dédiée si tu
   veux séparer clairement inscription et connexion.
+Premier déploiement
