@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -134,7 +135,11 @@ export default function LoginPage() {
             )}
           </div>
 
-          <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--ink-soft)', marginTop: 16 }}>
+          <p style={{ textAlign: 'center', fontSize: 14, color: 'var(--ink-soft)', marginTop: 16 }}>
+            Pas encore de compte ? <Link href="/inscription" style={{ color: 'var(--green)', fontWeight: 600 }}>Inscris-toi</Link>
+          </p>
+
+          <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--ink-soft)', marginTop: 8 }}>
             🔒 Tes données restent privées et sécurisées
           </p>
         </div>
