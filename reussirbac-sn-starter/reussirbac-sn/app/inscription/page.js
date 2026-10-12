@@ -41,7 +41,7 @@ export default function InscriptionPage() {
 
     if (error) { setError(traduire(error.message)); return; }
     // Si la confirmation par e-mail est activée dans Supabase, il n'y a pas encore de session
-    if (data.session) router.push('/catalogue');
+    if (data.session) router.push('/');
     else setAConfirmer(true);
   }
 

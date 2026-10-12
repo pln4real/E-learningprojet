@@ -45,4 +45,3 @@ export const TYPES = [
   { key: 'exercice', label: 'Exercice', plural: 'Exercices', icon: '✏️' },
   { key: 'annale', label: 'Annale', plural: 'Annales', icon: '🗂️' },
 ];
-

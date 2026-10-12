@@ -35,7 +35,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.verifyOtp({ phone: fullPhone, token: otp, type: 'sms' });
     setLoading(false);
     if (error) { setError(error.message); return; }
-    router.push('/catalogue');
+    router.push('/');
   }
 
   async function handleEmailSubmit(e) {
@@ -45,7 +45,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) { setError(error.message); return; }
-    router.push('/catalogue');
+    router.push('/');
   }
 
   return (

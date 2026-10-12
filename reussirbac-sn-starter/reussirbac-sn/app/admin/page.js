@@ -50,7 +50,7 @@ export default function AdminPage() {
           <p style={{ color: 'var(--ink-soft)', fontSize: 14 }}>
             Cette page est réservée aux administrateurs de la plateforme.
           </p>
-          <button className="btn-primary" style={{ marginTop: 16 }} onClick={() => router.push('/catalogue')}>
+          <button className="btn-primary" style={{ marginTop: 16 }} onClick={() => router.push('/')}>
             Retour au catalogue
           </button>
         </div>
@@ -73,7 +73,7 @@ export default function AdminPage() {
     <>
       <Topbar
         crumbs={[{ label: 'Espace admin' }]}
-        action={<a className="btn-dark" href="/catalogue">Voir le catalogue</a>}
+        action={<a className="btn-dark" href="/">Voir le site</a>}
       />
       <main className="admin-wrap">
         <div className="eyebrow">Espace Admin</div>

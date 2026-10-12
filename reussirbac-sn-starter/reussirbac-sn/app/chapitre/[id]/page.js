@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -7,6 +6,7 @@ import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
 import { TYPES, downloadUrl, youtubeId } from '../../../lib/media';
 import Topbar from '../../components/Topbar';
+import Sidebar from '../../components/Sidebar';
 
 export default function ChapitrePage() {
   const { id } = useParams();
@@ -44,7 +44,7 @@ export default function ChapitrePage() {
           <div className="empty-box">
             Ce chapitre n'existe pas ou n'est plus disponible.
             <div style={{ marginTop: 14 }}>
-              <Link href="/catalogue" className="btn-dark">Retour au catalogue</Link>
+              <Link href="/" className="btn-dark">Retour à l'accueil</Link>
             </div>
           </div>
         </main>
@@ -76,8 +76,8 @@ export default function ChapitrePage() {
     <>
       <Topbar
         crumbs={[
-          { label: niveau?.nom || 'Niveau', href: '/catalogue' },
-          { label: matiere?.nom || 'Matière', href: '/catalogue' },
+          { label: niveau?.nom || 'Niveau', href: niveau ? `/classe/${niveau.id}` : '/' },
+          { label: matiere?.nom || 'Matière', href: matiere ? `/matiere/${matiere.id}` : '/' },
           { label: chapitre.nom },
         ]}
         action={
@@ -89,7 +89,9 @@ export default function ChapitrePage() {
         }
       />
 
-      <main className="course-page">
+      <div className="with-side">
+      <Sidebar niveauId={niveau?.id} currentId={matiere?.id} />
+      <main className="course-page side-main">
         <div className="tag-row">
           {niveau && <span className="tag">{niveau.nom}</span>}
           {matiere && <span className="tag gold">{matiere.nom}</span>}
@@ -217,6 +219,7 @@ export default function ChapitrePage() {
           </div>
         )}
       </main>
+      </div>
     </>
   );
 }
