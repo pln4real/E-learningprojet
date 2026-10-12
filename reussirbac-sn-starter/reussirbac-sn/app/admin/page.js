@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { TYPES, safeFileName, storagePathFromUrl } from '../../lib/media';
 import Topbar from '../components/Topbar';
+import Icon from '../components/Icon';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -45,7 +46,7 @@ export default function AdminPage() {
     return (
       <main className="page">
         <div className="card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 32, marginBottom: 10 }}>🔒</div>
+          <div style={{ marginBottom: 10, color: 'var(--green)' }}><Icon name="lock" size={32} /></div>
           <h2 className="brand-font" style={{ fontSize: 20, margin: '0 0 8px' }}>Accès réservé</h2>
           <p style={{ color: 'var(--ink-soft)', fontSize: 14 }}>
             Cette page est réservée aux administrateurs de la plateforme.
@@ -131,6 +132,7 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
   const [source, setSource] = useState(initial?.source || 'pdf');
   const [file, setFile] = useState(null);
   const [videoUrl, setVideoUrl] = useState(initial?.url_video || '');
+  const [acces, setAcces] = useState(initial?.acces || 'gratuit');
   const [publie, setPublie] = useState(initial ? initial.statut === 'publie' : false);
   const [message, setMessage] = useState('');
   const [isError, setIsError] = useState(false);
@@ -201,6 +203,7 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
       url_fichier: source === 'pdf' ? urlFichier : null,
       url_video: source === 'video' ? videoUrl.trim() : null,
       statut: publie ? 'publie' : 'brouillon',
+      acces,
     };
 
     // 3. Enregistre
@@ -218,7 +221,7 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
       onSaved();
     } else {
       setIsError(false);
-      setMessage('✅ Contenu ajouté avec succès.');
+      setMessage('Contenu ajouté avec succès.');
       setTitre(''); setDescription(''); setChapitreNom(''); setVideoUrl(''); setFile(null);
     }
   }
@@ -280,8 +283,8 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
         <div className="field">
           <label>Support</label>
           <div className="pill-toggle" style={{ marginBottom: 12 }}>
-            <button type="button" className={source === 'pdf' ? 'active' : ''} onClick={() => setSource('pdf')}>📎 PDF</button>
-            <button type="button" className={source === 'video' ? 'active' : ''} onClick={() => setSource('video')}>🔗 Vidéo YouTube</button>
+            <button type="button" className={source === 'pdf' ? 'active' : ''} onClick={() => setSource('pdf')}><Icon name="file" size={15} /> PDF</button>
+            <button type="button" className={source === 'video' ? 'active' : ''} onClick={() => setSource('video')}><Icon name="play" size={15} /> Vidéo YouTube</button>
           </div>
           {source === 'pdf' ? (
             <>
@@ -295,6 +298,14 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
           ) : (
             <input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=..." />
           )}
+        </div>
+
+        <div className="field">
+          <label>Qui peut ouvrir ce contenu ?</label>
+          <div className="segmented">
+            <button type="button" className={acces === 'gratuit' ? 'active' : ''} onClick={() => setAcces('gratuit')}>Gratuit pour tous</button>
+            <button type="button" className={acces === 'abonne' ? 'active' : ''} onClick={() => setAcces('abonne')}>Abonnés seulement</button>
+          </div>
         </div>
 
         <label className="checkbox-row">
@@ -402,14 +413,17 @@ function ResourceList({ niveaux, onEdit }) {
           <div className="item-card" key={r.id}>
             <div className="item-top">
               <div>
-                <p className="item-title">{r.source === 'pdf' ? '📄' : '🎥'} {r.titre}</p>
+                <p className="item-title"><Icon name={r.source === 'pdf' ? 'file' : 'play'} size={15} /> {r.titre}</p>
                 <div className="item-meta">
                   {chap?.matieres?.niveaux?.nom} · {chap?.matieres?.nom} · {chap?.nom}
                   <br />
                   {typeInfo?.label || r.type}
                 </div>
               </div>
-              <span className={`badge ${publie ? 'publie' : 'brouillon'}`}>{publie ? 'Publié' : 'Brouillon'}</span>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                {r.acces === 'abonne' && <span className="badge abonne"><Icon name="lock" size={11} /> Abonnés</span>}
+                <span className={`badge ${publie ? 'publie' : 'brouillon'}`}>{publie ? 'Publié' : 'Brouillon'}</span>
+              </div>
             </div>
             <div className="item-actions">
               <button className="btn-light" disabled={busyId === r.id} onClick={() => toggleStatut(r)}>

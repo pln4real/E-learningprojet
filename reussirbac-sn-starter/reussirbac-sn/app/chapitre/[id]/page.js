@@ -4,13 +4,17 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
-import { TYPES, downloadUrl, youtubeId } from '../../../lib/media';
+import { TABS, downloadUrl, youtubeId } from '../../../lib/media';
+import { usePalier } from '../../../lib/usePalier';
 import Topbar from '../../components/Topbar';
 import Sidebar from '../../components/Sidebar';
+import Icon from '../../components/Icon';
 
 export default function ChapitrePage() {
   const { id } = useParams();
+  const { palier, connecte } = usePalier();
   const [chapitre, setChapitre] = useState(null);
+  const [verrouillees, setVerrouillees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [tabKey, setTabKey] = useState(null);
@@ -27,6 +31,10 @@ export default function ChapitrePage() {
         .maybeSingle();
       if (error || !data) setNotFound(true);
       else setChapitre(data);
+
+      // Ressources réservées aux abonnés : on récupère leur titre (jamais leur lien)
+      const { data: lock, error: errLock } = await supabase.rpc('ressources_verrouillees', { p_chapitre: id });
+      if (!errLock && Array.isArray(lock)) setVerrouillees(lock);
       setLoading(false);
     }
     load();
@@ -52,25 +60,31 @@ export default function ChapitrePage() {
     );
   }
 
-  // Les élèves ne voient que les ressources publiées
-  const publiees = (chapitre.ressources || [])
-    .filter((r) => r.statut === 'publie')
-    .sort((a, b) => new Date(a.cree_le) - new Date(b.cree_le));
+  // Ressources lisibles (publiées) + ressources verrouillées (titre seulement)
+  const lisibles = (chapitre.ressources || []).filter((r) => r.statut === 'publie');
+  const idsLisibles = new Set(lisibles.map((r) => r.id));
+  const toutes = [
+    ...lisibles,
+    ...verrouillees.filter((r) => !idsLisibles.has(r.id)).map((r) => ({ ...r, verrouille: true })),
+  ].sort((a, b) => new Date(a.cree_le) - new Date(b.cree_le));
 
-  const parType = {};
-  TYPES.forEach((t) => { parType[t.key] = publiees.filter((r) => r.type === t.key); });
+  const parOnglet = {};
+  TABS.forEach((t) => { parOnglet[t.key] = toutes.filter(t.match); });
 
   // Onglet actif : celui choisi, sinon le premier qui contient quelque chose
-  const premierNonVide = TYPES.find((t) => parType[t.key].length > 0)?.key || TYPES[0].key;
-  const activeTab = tabKey && TYPES.some((t) => t.key === tabKey) ? tabKey : premierNonVide;
-  const liste = parType[activeTab];
+  const premierNonVide = TABS.find((t) => parOnglet[t.key].length > 0)?.key || TABS[0].key;
+  const activeTab = tabKey && TABS.some((t) => t.key === tabKey) ? tabKey : premierNonVide;
+  const liste = parOnglet[activeTab];
   const selected = liste.find((r) => r.id === selectedId) || liste[0] || null;
 
   const niveau = chapitre.matieres?.niveaux;
   const matiere = chapitre.matieres;
-  const estPdf = selected?.source === 'pdf' && selected?.url_fichier;
-  const videoId = selected?.source === 'video' ? youtubeId(selected.url_video) : null;
+  const verrou = !!selected?.verrouille;
+  const estPdf = !verrou && selected?.source === 'pdf' && selected?.url_fichier;
+  const videoId = !verrou && selected?.source === 'video' ? youtubeId(selected.url_video) : null;
   const lecteurCharge = selected && playingId === selected.id;
+  const peutTelecharger = palier === 'premium';
+  const ongletCourant = TABS.find((t) => t.key === activeTab);
 
   return (
     <>
@@ -81,144 +95,164 @@ export default function ChapitrePage() {
           { label: chapitre.nom },
         ]}
         action={
-          estPdf ? (
+          estPdf && peutTelecharger ? (
             <a className="btn-dark" href={downloadUrl(selected.url_fichier, selected.titre)}>
-              ⬇ Télécharger en PDF
+              <Icon name="download" size={16} /> Télécharger en PDF
             </a>
           ) : null
         }
       />
 
       <div className="with-side">
-      <Sidebar niveauId={niveau?.id} currentId={matiere?.id} />
-      <main className="course-page side-main">
-        <div className="tag-row">
-          {niveau && <span className="tag">{niveau.nom}</span>}
-          {matiere && <span className="tag gold">{matiere.nom}</span>}
-        </div>
-        <h1 className="brand-font" style={{ fontSize: 29, lineHeight: 1.2, margin: '0 0 20px' }}>
-          {chapitre.nom}
-        </h1>
-
-        <div className="res-tabs" role="tablist">
-          {TYPES.map((t) => (
-            <button
-              key={t.key}
-              role="tab"
-              aria-selected={activeTab === t.key}
-              className={activeTab === t.key ? 'active' : ''}
-              onClick={() => { setTabKey(t.key); setSelectedId(null); }}
-            >
-              <span className="ic">{t.icon}</span>
-              {t.plural}
-              <span className="count">{parType[t.key].length}</span>
-            </button>
-          ))}
-        </div>
-
-        {liste.length === 0 && (
-          <div className="empty-box">
-            Pas encore de {TYPES.find((t) => t.key === activeTab).plural.toLowerCase()} pour ce chapitre.
+        <Sidebar niveauId={niveau?.id} currentId={matiere?.id} />
+        <main className="course-page side-main">
+          <div className="tag-row">
+            {niveau && <span className="tag">{niveau.nom}</span>}
+            {matiere && <span className="tag gold">{matiere.nom}</span>}
           </div>
-        )}
+          <h1 className="brand-font" style={{ fontSize: 'clamp(1.8rem, 4vw, 2.6rem)', lineHeight: 1.05, margin: '0 0 22px', fontWeight: 800 }}>
+            {chapitre.nom}
+          </h1>
 
-        {liste.length > 1 && (
-          <div className="res-list">
-            {liste.map((r) => (
+          <div className="res-tabs" role="tablist">
+            {TABS.map((t) => (
               <button
-                key={r.id}
-                className={`res-chip ${selected?.id === r.id ? 'active' : ''}`}
-                onClick={() => setSelectedId(r.id)}
+                key={t.key}
+                role="tab"
+                aria-selected={activeTab === t.key}
+                className={activeTab === t.key ? 'active' : ''}
+                onClick={() => { setTabKey(t.key); setSelectedId(null); }}
               >
-                {r.source === 'pdf' ? '📄' : '🎥'} {r.titre}
+                <Icon name={t.icon} size={17} />
+                {t.label}
+                <span className="count">{parOnglet[t.key].length}</span>
               </button>
             ))}
           </div>
-        )}
 
-        {selected && (
-          <div className="viewer">
-            <div className="viewer-head">
-              <h2 className="brand-font">{selected.titre}</h2>
-              {selected.description && <p>{selected.description}</p>}
+          {liste.length === 0 && (
+            <div className="empty-box">
+              Rien dans « {ongletCourant.label} » pour ce chapitre pour l'instant.
             </div>
+          )}
 
-            {/* ---- Vidéo YouTube : chargée au clic pour économiser les données ---- */}
-            {selected.source === 'video' && videoId && (
-              lecteurCharge ? (
-                <div className="video-frame">
-                  <iframe
-                    src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0`}
-                    title={selected.titre}
-                    allow="accelerometer; autoplay; encrypted-media; picture-in-picture; fullscreen"
-                    allowFullScreen
-                  />
-                </div>
-              ) : (
+          {liste.length > 1 && (
+            <div className="res-list">
+              {liste.map((r) => (
                 <button
-                  type="button"
-                  className="video-frame"
-                  onClick={() => setPlayingId(selected.id)}
-                  style={{ border: 0, padding: 0, cursor: 'pointer', display: 'block', width: '100%' }}
-                  aria-label="Lire la vidéo"
+                  key={r.id}
+                  className={`res-chip ${selected?.id === r.id ? 'active' : ''}`}
+                  onClick={() => setSelectedId(r.id)}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
-                    alt=""
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }}
-                  />
-                  <span
-                    style={{
-                      position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
-                      width: 68, height: 68, borderRadius: '50%', background: 'rgba(15,34,28,0.85)',
-                      color: '#fff', fontSize: 26, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}
-                  >
-                    ▶
-                  </span>
+                  <Icon name={r.verrouille ? 'lock' : r.source === 'pdf' ? 'file' : 'play'} size={15} />
+                  {r.titre}
                 </button>
-              )
-            )}
-            {selected.source === 'video' && !videoId && (
-              <p className="viewer-note" style={{ paddingTop: 4 }}>
-                Le lien de cette vidéo n'est pas reconnu comme un lien YouTube. Utilise le bouton ci-dessous pour l'ouvrir.
-              </p>
-            )}
+              ))}
+            </div>
+          )}
 
-            {/* ---- PDF : lisible dans la page, chargé au clic ---- */}
-            {estPdf && lecteurCharge && (
-              <iframe className="pdf-frame" src={selected.url_fichier} title={selected.titre} />
-            )}
+          {selected && (
+            <div className="viewer">
+              <div className="viewer-head">
+                <h2 className="brand-font">{selected.titre}</h2>
+                {selected.description && <p>{selected.description}</p>}
+              </div>
 
-            <div className="viewer-actions">
-              {estPdf && !lecteurCharge && (
-                <button className="btn-dark" onClick={() => setPlayingId(selected.id)}>📖 Lire le PDF ici</button>
+              {/* ---- Ressource réservée aux abonnés ---- */}
+              {verrou && (
+                <div className="lock-panel">
+                  <span className="lock-badge"><Icon name="lock" size={22} /></span>
+                  <h3 className="brand-font">Réservé aux abonnés</h3>
+                  {connecte ? (
+                    <p>Les abonnements ouvrent bientôt. Cette ressource sera alors disponible avec ton compte.</p>
+                  ) : (
+                    <>
+                      <p>Crée un compte gratuit pour suivre les cours ouverts à tous. Les abonnements arrivent bientôt.</p>
+                      <div className="lock-actions">
+                        <Link href="/inscription" className="btn-dark">Créer un compte</Link>
+                        <Link href="/login" className="btn-light">Connexion</Link>
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
-              {estPdf && (
-                <>
-                  <a className="btn-light" href={selected.url_fichier} target="_blank" rel="noreferrer">
-                    Ouvrir dans un nouvel onglet
-                  </a>
-                  <a className="btn-light" href={downloadUrl(selected.url_fichier, selected.titre)}>
-                    Télécharger
-                  </a>
-                </>
+
+              {/* ---- Vidéo YouTube : chargée au clic pour économiser les données ---- */}
+              {!verrou && selected.source === 'video' && videoId && (
+                lecteurCharge ? (
+                  <div className="video-frame">
+                    <iframe
+                      src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0`}
+                      title={selected.titre}
+                      allow="accelerometer; autoplay; encrypted-media; picture-in-picture; fullscreen"
+                      allowFullScreen
+                    />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="video-frame"
+                    onClick={() => setPlayingId(selected.id)}
+                    style={{ border: 0, padding: 0, cursor: 'pointer', display: 'block', width: '100%' }}
+                    aria-label="Lire la vidéo"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
+                      alt=""
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }}
+                    />
+                    <span className="play-btn"><Icon name="play" size={34} /></span>
+                  </button>
+                )
               )}
-              {selected.source === 'video' && (
-                <a className="btn-light" href={selected.url_video} target="_blank" rel="noreferrer">
-                  Ouvrir sur YouTube
-                </a>
+              {!verrou && selected.source === 'video' && !videoId && (
+                <p className="viewer-note" style={{ paddingTop: 4 }}>
+                  Le lien de cette vidéo n'est pas reconnu comme un lien YouTube. Utilise le bouton ci-dessous pour l'ouvrir.
+                </p>
+              )}
+
+              {/* ---- PDF : lisible dans la page, chargé au clic ---- */}
+              {estPdf && lecteurCharge && (
+                <iframe className="pdf-frame" src={selected.url_fichier} title={selected.titre} />
+              )}
+
+              {!verrou && (
+                <div className="viewer-actions">
+                  {estPdf && !lecteurCharge && (
+                    <button className="btn-dark" onClick={() => setPlayingId(selected.id)}>
+                      <Icon name="bookOpen" size={16} /> Lire le PDF ici
+                    </button>
+                  )}
+                  {estPdf && (
+                    <a className="btn-light" href={selected.url_fichier} target="_blank" rel="noreferrer">
+                      <Icon name="external" size={15} /> Ouvrir dans un nouvel onglet
+                    </a>
+                  )}
+                  {estPdf && (peutTelecharger ? (
+                    <a className="btn-light" href={downloadUrl(selected.url_fichier, selected.titre)}>
+                      <Icon name="download" size={15} /> Télécharger
+                    </a>
+                  ) : (
+                    <span className="btn-light btn-locked" title="Le téléchargement est réservé à l'abonnement Premium">
+                      <Icon name="lock" size={15} /> Télécharger (Premium)
+                    </span>
+                  ))}
+                  {selected.source === 'video' && (
+                    <a className="btn-light" href={selected.url_video} target="_blank" rel="noreferrer">
+                      <Icon name="external" size={15} /> Ouvrir sur YouTube
+                    </a>
+                  )}
+                </div>
+              )}
+              {estPdf && lecteurCharge && (
+                <p className="viewer-note">
+                  Si le PDF ne s'affiche pas bien sur ton téléphone, utilise « Ouvrir dans un nouvel onglet ».
+                </p>
               )}
             </div>
-            {estPdf && lecteurCharge && (
-              <p className="viewer-note">
-                Si le PDF ne s'affiche pas bien sur ton téléphone, utilise « Ouvrir dans un nouvel onglet » ou « Télécharger ».
-              </p>
-            )}
-          </div>
-        )}
-      </main>
+          )}
+        </main>
       </div>
     </>
   );

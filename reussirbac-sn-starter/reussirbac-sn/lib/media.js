@@ -41,7 +41,15 @@ export function safeFileName(name) {
 }
 
 export const TYPES = [
-  { key: 'cours', label: 'Cours', plural: 'Cours', icon: '📘' },
-  { key: 'exercice', label: 'Exercice', plural: 'Exercices', icon: '✏️' },
-  { key: 'annale', label: 'Annale', plural: 'Annales', icon: '🗂️' },
+  { key: 'cours', label: 'Cours', plural: 'Cours', icon: 'book' },
+  { key: 'exercice', label: 'Exercice', plural: 'Exercices', icon: 'pencil' },
+  { key: 'annale', label: 'Annale', plural: 'Annales', icon: 'archive' },
+];
+
+// Onglets de la page de cours : la vidéo de cours a son propre onglet.
+export const TABS = [
+  { key: 'cours', label: 'Cours', icon: 'book', match: (r) => r.type === 'cours' && r.source !== 'video' },
+  { key: 'video', label: 'Vidéo', icon: 'play', match: (r) => r.type === 'cours' && r.source === 'video' },
+  { key: 'exercice', label: 'Exercices', icon: 'pencil', match: (r) => r.type === 'exercice' },
+  { key: 'annale', label: 'Annales', icon: 'archive', match: (r) => r.type === 'annale' },
 ];

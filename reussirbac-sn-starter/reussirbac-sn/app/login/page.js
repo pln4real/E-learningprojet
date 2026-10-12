@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
+import Icon from '../components/Icon';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -80,10 +81,10 @@ export default function LoginPage() {
               <>
                 <div className="pill-toggle" style={{ marginBottom: 18 }}>
                   <button className={method === 'phone' ? 'active' : ''} onClick={() => setMethod('phone')} type="button">
-                    📱 Numéro
+                    <Icon name="phone" size={16} /> Numéro
                   </button>
                   <button className={method === 'email' ? 'active' : ''} onClick={() => setMethod('email')} type="button">
-                    ✉️ E-mail
+                    <Icon name="mail" size={16} /> E-mail
                   </button>
                 </div>
 
@@ -93,7 +94,7 @@ export default function LoginPage() {
                       <label>Numéro de téléphone</label>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <div style={{ flex: '0 0 68px', border: '1px solid var(--line)', borderRadius: 9, background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 600, color: 'var(--ink-soft)' }}>
-                          🇸🇳 +221
+                          +221
                         </div>
                         <input type="tel" placeholder="77 123 45 67" value={phone} onChange={(e) => setPhone(e.target.value)} required />
                       </div>
@@ -140,7 +141,7 @@ export default function LoginPage() {
           </p>
 
           <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--ink-soft)', marginTop: 8 }}>
-            🔒 Tes données restent privées et sécurisées
+            <Icon name="shield" size={15} /> Tes données restent privées et sécurisées
           </p>
         </div>
       </div>

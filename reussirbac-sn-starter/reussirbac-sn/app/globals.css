@@ -338,3 +338,28 @@ a.lp-level:hover { background: var(--green-soft); padding-inline: 18px; }
 .lp-footer { padding: 36px 0 60px; color: var(--ink-soft); font-size: 14.5px; border-top: 1px solid var(--line); }
 .lp-footer .lp-wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+
+/* =====================================================================
+   Icônes, onglets, accès abonné
+   ===================================================================== */
+.icon { flex: 0 0 auto; vertical-align: -3px; }
+.btn-dark .icon, .btn-light .icon, .res-chip .icon, .chip .icon, .pill-toggle .icon, .item-title .icon, .badge .icon { vertical-align: -2px; }
+.res-tabs button { gap: 8px; }
+.res-tabs .icon { opacity: .85; }
+.res-chip { display: inline-flex; align-items: center; gap: 7px; }
+.chip { display: inline-flex; align-items: center; gap: 5px; }
+.pill-toggle button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.btn-locked { color: var(--ink-soft); background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); cursor: default; }
+.badge.abonne { background: var(--gold-soft); color: #A8164A; display: inline-flex; align-items: center; gap: 4px; }
+.badge.brouillon { background: #EFEFF6; color: var(--ink-soft); }
+.lp-item-name { display: inline-flex; align-items: center; gap: 8px; }
+
+.play-btn { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 72px; height: 72px; border-radius: 50%; background: rgba(27,33,104,.88); color: #fff; display: flex; align-items: center; justify-content: center; transition: transform .15s, background .15s; }
+.play-btn .icon { margin-left: 3px; }
+button.video-frame:hover .play-btn { transform: translate(-50%, -50%) scale(1.06); background: var(--gold); }
+
+.lock-panel { padding: 36px 24px 40px; text-align: center; border-top: 1px solid var(--line); background: var(--bg); }
+.lock-badge { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: 50%; background: var(--gold-soft); color: #A8164A; margin-bottom: 12px; }
+.lock-panel h3 { margin: 0 0 6px; font-size: 22px; font-weight: 800; }
+.lock-panel p { margin: 0 auto; max-width: 42ch; color: var(--ink-soft); font-size: 15px; line-height: 1.55; }
+.lock-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }

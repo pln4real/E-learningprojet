@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
+import Icon from './components/Icon';
 
 const DEMO = {
   cours: { items: [['Cours complet : forme algébrique', 'PDF'], ['Vidéo : module et argument', 'Vidéo'], ['Fiche de révision', 'PDF']], foot: 'Un cours se lit dans la page, sans rien télécharger.' },
@@ -60,7 +61,7 @@ export default function Accueil() {
                   const locked = tag === 'Abonnés';
                   return (
                     <li key={t} className={locked ? 'locked' : ''}>
-                      <span>{locked ? '🔒 ' : ''}{t}</span>
+                      <span className="lp-item-name">{locked && <Icon name="lock" size={15} />}{t}</span>
                       <span className="lp-tag">{tag}</span>
                     </li>
                   );

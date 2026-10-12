@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
-import { TYPES } from '../../../lib/media';
+import { TABS } from '../../../lib/media';
+import Icon from '../../components/Icon';
 import Topbar from '../../components/Topbar';
 import Sidebar from '../../components/Sidebar';
 import { SubjectGlyph } from '../../components/SubjectArt';
@@ -58,10 +59,10 @@ export default function MatierePage() {
                     <span className="chev">›</span>
                   </div>
                   <div className="chips">
-                    {TYPES.map((t) => {
-                      const n = ch.publiees.filter((r) => r.type === t.key).length;
+                    {TABS.map((t) => {
+                      const n = ch.publiees.filter(t.match).length;
                       if (!n) return null;
-                      return <span className="chip" key={t.key}>{t.icon} {n} {n > 1 ? t.plural.toLowerCase() : t.label.toLowerCase()}</span>;
+                      return <span className="chip" key={t.key}><Icon name={t.icon} size={13} /> {n} {t.label.toLowerCase()}</span>;
                     })}
                   </div>
                 </Link>
