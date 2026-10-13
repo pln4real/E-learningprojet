@@ -46,10 +46,22 @@ export const TYPES = [
   { key: 'annale', label: 'Annale', plural: 'Annales', icon: 'archive' },
 ];
 
+// Un contenu peut avoir un PDF, une vidéo YouTube, ou les deux.
+// (les ressources verrouillées arrivent avec a_pdf / a_video, sans les liens)
+export function aPdf(r) {
+  if (typeof r.a_pdf === 'boolean') return r.a_pdf;
+  return !!r.url_fichier || (!r.url_video && r.source === 'pdf');
+}
+export function aVideo(r) {
+  if (typeof r.a_video === 'boolean') return r.a_video;
+  return !!r.url_video || (!r.url_fichier && r.source === 'video');
+}
+
 // Onglets de la page de cours : la vidéo de cours a son propre onglet.
+// Un cours qui a un PDF ET une vidéo apparaît dans les deux onglets.
 export const TABS = [
-  { key: 'cours', label: 'Cours', icon: 'book', match: (r) => r.type === 'cours' && r.source !== 'video' },
-  { key: 'video', label: 'Vidéo', icon: 'play', match: (r) => r.type === 'cours' && r.source === 'video' },
+  { key: 'cours', label: 'Cours', icon: 'book', match: (r) => r.type === 'cours' && (aPdf(r) || !aVideo(r)) },
+  { key: 'video', label: 'Vidéo', icon: 'play', match: (r) => r.type === 'cours' && aVideo(r) },
   { key: 'exercice', label: 'Exercices', icon: 'pencil', match: (r) => r.type === 'exercice' },
   { key: 'annale', label: 'Annales', icon: 'archive', match: (r) => r.type === 'annale' },
 ];

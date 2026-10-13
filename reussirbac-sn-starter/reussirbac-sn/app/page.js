@@ -32,7 +32,7 @@ export default function Accueil() {
         <nav className="lp-nav-links" aria-label="Navigation principale">
           <a className="hide-s" href="#niveaux">Classes</a>
           <Link href="/login">Connexion</Link>
-          <Link className="lp-btn lp-btn-main" href="/inscription">Créer un compte</Link>
+          <Link className="lp-btn lp-btn-main" href="/inscription"><span className="long">Créer un compte</span><span className="short">S'inscrire</span></Link>
         </nav>
       </header>
 

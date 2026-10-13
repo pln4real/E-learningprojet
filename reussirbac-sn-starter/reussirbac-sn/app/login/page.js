@@ -8,7 +8,7 @@ import Icon from '../components/Icon';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [method, setMethod] = useState('phone');
+  const [method, setMethod] = useState('email');
   const [step, setStep] = useState('form');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -24,7 +24,11 @@ export default function LoginPage() {
     const fullPhone = '+221' + phone.replace(/\s/g, '');
     const { error } = await supabase.auth.signInWithOtp({ phone: fullPhone });
     setLoading(false);
-    if (error) { setError(error.message); return; }
+    if (error) {
+      setError("La connexion par numéro de téléphone n'est pas encore disponible. Utilise ton adresse e-mail.");
+      setMethod('email');
+      return;
+    }
     setStep('otp');
   }
 

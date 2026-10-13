@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
-import { TYPES, safeFileName, storagePathFromUrl } from '../../lib/media';
+import { TYPES, aPdf, aVideo, safeFileName, storagePathFromUrl } from '../../lib/media';
 import Topbar from '../components/Topbar';
 import Icon from '../components/Icon';
 
@@ -129,8 +129,8 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
   const [type, setType] = useState(initial?.type || 'cours');
   const [titre, setTitre] = useState(initial?.titre || '');
   const [description, setDescription] = useState(initial?.description || '');
-  const [source, setSource] = useState(initial?.source || 'pdf');
   const [file, setFile] = useState(null);
+  const [retirerPdf, setRetirerPdf] = useState(false);
   const [videoUrl, setVideoUrl] = useState(initial?.url_video || '');
   const [acces, setAcces] = useState(initial?.acces || 'gratuit');
   const [publie, setPublie] = useState(initial ? initial.statut === 'publie' : false);
@@ -158,12 +158,13 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
       fail('Merci de renseigner au moins la matière, le chapitre et le titre.');
       return;
     }
-    if (source === 'video' && !videoUrl.trim()) {
-      fail('Colle le lien de la vidéo YouTube.');
+    const pdfExistant = isEdit && initial.url_fichier && !retirerPdf;
+    if (!file && !pdfExistant && !videoUrl.trim()) {
+      fail('Ajoute au moins un support : un fichier PDF, un lien YouTube, ou les deux.');
       return;
     }
-    if (source === 'pdf' && !file && !(isEdit && initial.url_fichier)) {
-      fail('Choisis un fichier PDF.');
+    if (videoUrl.trim() && !/youtu\.?be/i.test(videoUrl)) {
+      fail("Le lien vidéo doit être un lien YouTube (youtube.com ou youtu.be).");
       return;
     }
 
@@ -182,26 +183,26 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
     }
 
     // 2. Upload du PDF (nom nettoyé : pas d'accents ni d'espaces)
-    let urlFichier = isEdit && source === 'pdf' ? initial.url_fichier : null;
+    let urlFichier = pdfExistant ? initial.url_fichier : null;
     let ancienFichier = null;
-    if (source === 'pdf' && file) {
+    if (file) {
       const path = `${Date.now()}-${safeFileName(file.name)}`;
       const { error: errUpload } = await supabase.storage.from('ressources').upload(path, file);
       if (errUpload) { fail('Erreur upload : ' + errUpload.message); return; }
       urlFichier = supabase.storage.from('ressources').getPublicUrl(path).data.publicUrl;
       if (isEdit) ancienFichier = initial.url_fichier;
     }
-    // Passage de PDF à vidéo : l'ancien fichier devient inutile
-    if (isEdit && source === 'video' && initial.url_fichier) ancienFichier = initial.url_fichier;
+    // PDF retiré sans être remplacé : l'ancien fichier devient inutile
+    if (isEdit && retirerPdf && !file && initial.url_fichier) ancienFichier = initial.url_fichier;
 
     const row = {
       chapitre_id: chapitreId,
       type,
       titre: titre.trim(),
       description: description.trim(),
-      source,
-      url_fichier: source === 'pdf' ? urlFichier : null,
-      url_video: source === 'video' ? videoUrl.trim() : null,
+      source: urlFichier ? 'pdf' : 'video',
+      url_fichier: urlFichier,
+      url_video: videoUrl.trim() || null,
       statut: publie ? 'publie' : 'brouillon',
       acces,
     };
@@ -222,7 +223,7 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
     } else {
       setIsError(false);
       setMessage('Contenu ajouté avec succès.');
-      setTitre(''); setDescription(''); setChapitreNom(''); setVideoUrl(''); setFile(null);
+      setTitre(''); setDescription(''); setChapitreNom(''); setVideoUrl(''); setFile(null); setRetirerPdf(false);
     }
   }
 
@@ -281,23 +282,31 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
         </div>
 
         <div className="field">
-          <label>Support</label>
-          <div className="pill-toggle" style={{ marginBottom: 12 }}>
-            <button type="button" className={source === 'pdf' ? 'active' : ''} onClick={() => setSource('pdf')}><Icon name="file" size={15} /> PDF</button>
-            <button type="button" className={source === 'video' ? 'active' : ''} onClick={() => setSource('video')}><Icon name="play" size={15} /> Vidéo YouTube</button>
-          </div>
-          {source === 'pdf' ? (
+          <label><Icon name="file" size={14} /> Support PDF (facultatif)</label>
+          <input type="file" accept="application/pdf" onChange={(e) => { setFile(e.target.files[0] || null); setRetirerPdf(false); }} />
+          {isEdit && initial.url_fichier && (
             <>
-              <input type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files[0] || null)} />
-              {isEdit && initial.url_fichier && (
-                <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '8px 0 0' }}>
-                  Un PDF est déjà enregistré. Choisis un nouveau fichier seulement pour le remplacer.
-                </p>
+              <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '8px 0 0' }}>
+                {retirerPdf
+                  ? 'Le PDF actuel sera supprimé à l\'enregistrement.'
+                  : 'Un PDF est déjà enregistré. Choisis un nouveau fichier seulement pour le remplacer.'}
+              </p>
+              {!file && (
+                <label className="checkbox-row" style={{ margin: '8px 0 0' }}>
+                  <input type="checkbox" checked={retirerPdf} onChange={(e) => setRetirerPdf(e.target.checked)} />
+                  Retirer le PDF actuel
+                </label>
               )}
             </>
-          ) : (
-            <input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=..." />
           )}
+        </div>
+
+        <div className="field">
+          <label><Icon name="play" size={14} /> Vidéo YouTube (facultatif)</label>
+          <input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=..." />
+          <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '8px 0 0' }}>
+            Tu peux ajouter le PDF, la vidéo, ou les deux pour le même contenu. Vider le champ retire la vidéo.
+          </p>
         </div>
 
         <div className="field">
@@ -413,7 +422,7 @@ function ResourceList({ niveaux, onEdit }) {
           <div className="item-card" key={r.id}>
             <div className="item-top">
               <div>
-                <p className="item-title"><Icon name={r.source === 'pdf' ? 'file' : 'play'} size={15} /> {r.titre}</p>
+                <p className="item-title">{aPdf(r) && <Icon name="file" size={15} />}{aVideo(r) && <Icon name="play" size={15} />} {r.titre}</p>
                 <div className="item-meta">
                   {chap?.matieres?.niveaux?.nom} · {chap?.matieres?.nom} · {chap?.nom}
                   <br />

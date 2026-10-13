@@ -363,3 +363,23 @@ button.video-frame:hover .play-btn { transform: translate(-50%, -50%) scale(1.06
 .lock-panel h3 { margin: 0 0 6px; font-size: 22px; font-weight: 800; }
 .lock-panel p { margin: 0 auto; max-width: 42ch; color: var(--ink-soft); font-size: 15px; line-height: 1.55; }
 .lock-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
+
+.lp-btn .short { display: none; }
+@media (max-width: 560px) {
+  .lp-btn .long { display: none; }
+  .lp-btn .short { display: inline; }
+  .lp-nav-links { gap: 14px; }
+  .lp-nav .lp-btn { padding: 9px 14px; }
+}
+
+/* Petits écrans : fil d'Ariane et onglets plus compacts */
+@media (max-width: 600px) {
+  .topbar { padding: 10px 16px; }
+  .crumb-wrap:not(:last-child) { display: none; }
+  .crumb-current { display: block; max-width: 60vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+@media (max-width: 520px) {
+  .res-tabs { gap: 6px; }
+  .res-tabs button { padding: 9px 11px; gap: 6px; }
+  .res-tabs button .icon { display: none; }
+}

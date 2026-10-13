@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
-import { TABS, downloadUrl, youtubeId } from '../../../lib/media';
+import { TABS, aPdf, aVideo, downloadUrl, youtubeId } from '../../../lib/media';
 import { usePalier } from '../../../lib/usePalier';
 import Topbar from '../../components/Topbar';
 import Sidebar from '../../components/Sidebar';
@@ -19,7 +19,8 @@ export default function ChapitrePage() {
   const [notFound, setNotFound] = useState(false);
   const [tabKey, setTabKey] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
-  const [playingId, setPlayingId] = useState(null); // ressource dont le lecteur est chargé
+  const [videoOnId, setVideoOnId] = useState(null); // vidéo dont le lecteur est chargé
+  const [pdfOnId, setPdfOnId] = useState(null); // PDF dont le lecteur est chargé
 
   useEffect(() => {
     if (!id) return;
@@ -80,9 +81,19 @@ export default function ChapitrePage() {
   const niveau = chapitre.matieres?.niveaux;
   const matiere = chapitre.matieres;
   const verrou = !!selected?.verrouille;
-  const estPdf = !verrou && selected?.source === 'pdf' && selected?.url_fichier;
-  const videoId = !verrou && selected?.source === 'video' ? youtubeId(selected.url_video) : null;
-  const lecteurCharge = selected && playingId === selected.id;
+  // Un contenu peut avoir un PDF et une vidéo. L'onglet « Cours » montre le PDF,
+  // l'onglet « Vidéo » la vidéo, les exercices et annales montrent les deux.
+  const montrePdf = activeTab !== 'video';
+  const montreVideo = activeTab !== 'cours';
+  const aUnPdf = !!selected && !verrou && !!selected.url_fichier;
+  const aUneVideo = !!selected && !verrou && !!selected.url_video;
+  const estPdf = aUnPdf && montrePdf;
+  const videoId = aUneVideo && montreVideo ? youtubeId(selected.url_video) : null;
+  const videoCharge = selected && videoOnId === selected.id;
+  const pdfCharge = selected && pdfOnId === selected.id;
+  // Passerelles entre les onglets quand le même contenu a les deux supports
+  const autreVideo = !verrou && activeTab === 'cours' && selected && aVideo(selected) && aUneVideo;
+  const autrePdf = !verrou && activeTab === 'video' && selected && aPdf(selected) && aUnPdf;
   const peutTelecharger = palier === 'premium';
   const ongletCourant = TABS.find((t) => t.key === activeTab);
 
@@ -144,7 +155,7 @@ export default function ChapitrePage() {
                   className={`res-chip ${selected?.id === r.id ? 'active' : ''}`}
                   onClick={() => setSelectedId(r.id)}
                 >
-                  <Icon name={r.verrouille ? 'lock' : r.source === 'pdf' ? 'file' : 'play'} size={15} />
+                  <Icon name={r.verrouille ? 'lock' : activeTab === 'video' ? 'play' : aPdf(r) ? 'file' : 'play'} size={15} />
                   {r.titre}
                 </button>
               ))}
@@ -178,8 +189,8 @@ export default function ChapitrePage() {
               )}
 
               {/* ---- Vidéo YouTube : chargée au clic pour économiser les données ---- */}
-              {!verrou && selected.source === 'video' && videoId && (
-                lecteurCharge ? (
+              {!verrou && montreVideo && aUneVideo && videoId && (
+                videoCharge ? (
                   <div className="video-frame">
                     <iframe
                       src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0`}
@@ -192,7 +203,7 @@ export default function ChapitrePage() {
                   <button
                     type="button"
                     className="video-frame"
-                    onClick={() => setPlayingId(selected.id)}
+                    onClick={() => setVideoOnId(selected.id)}
                     style={{ border: 0, padding: 0, cursor: 'pointer', display: 'block', width: '100%' }}
                     aria-label="Lire la vidéo"
                   >
@@ -206,21 +217,21 @@ export default function ChapitrePage() {
                   </button>
                 )
               )}
-              {!verrou && selected.source === 'video' && !videoId && (
+              {!verrou && montreVideo && aUneVideo && !videoId && (
                 <p className="viewer-note" style={{ paddingTop: 4 }}>
                   Le lien de cette vidéo n'est pas reconnu comme un lien YouTube. Utilise le bouton ci-dessous pour l'ouvrir.
                 </p>
               )}
 
               {/* ---- PDF : lisible dans la page, chargé au clic ---- */}
-              {estPdf && lecteurCharge && (
+              {estPdf && pdfCharge && (
                 <iframe className="pdf-frame" src={selected.url_fichier} title={selected.titre} />
               )}
 
               {!verrou && (
                 <div className="viewer-actions">
-                  {estPdf && !lecteurCharge && (
-                    <button className="btn-dark" onClick={() => setPlayingId(selected.id)}>
+                  {estPdf && !pdfCharge && (
+                    <button className="btn-dark" onClick={() => setPdfOnId(selected.id)}>
                       <Icon name="bookOpen" size={16} /> Lire le PDF ici
                     </button>
                   )}
@@ -238,14 +249,24 @@ export default function ChapitrePage() {
                       <Icon name="lock" size={15} /> Télécharger (Premium)
                     </span>
                   ))}
-                  {selected.source === 'video' && (
+                  {montreVideo && aUneVideo && (
                     <a className="btn-light" href={selected.url_video} target="_blank" rel="noreferrer">
                       <Icon name="external" size={15} /> Ouvrir sur YouTube
                     </a>
                   )}
+                  {autreVideo && (
+                    <button className="btn-light" onClick={() => { setTabKey('video'); setSelectedId(selected.id); }}>
+                      <Icon name="play" size={15} /> Voir la vidéo de ce cours
+                    </button>
+                  )}
+                  {autrePdf && (
+                    <button className="btn-light" onClick={() => { setTabKey('cours'); setSelectedId(selected.id); }}>
+                      <Icon name="file" size={15} /> Lire le support PDF
+                    </button>
+                  )}
                 </div>
               )}
-              {estPdf && lecteurCharge && (
+              {estPdf && pdfCharge && (
                 <p className="viewer-note">
                   Si le PDF ne s'affiche pas bien sur ton téléphone, utilise « Ouvrir dans un nouvel onglet ».
                 </p>

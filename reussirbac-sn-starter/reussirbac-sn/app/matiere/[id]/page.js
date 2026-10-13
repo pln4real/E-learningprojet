@@ -19,7 +19,7 @@ export default function MatierePage() {
     if (!id) return;
     supabase
       .from('matieres')
-      .select('id, nom, niveaux(id, nom), chapitres(id, nom, ordre, ressources(id, type, statut))')
+      .select('id, nom, niveaux(id, nom), chapitres(id, nom, ordre, ressources(id, type, statut, source, url_fichier, url_video))')
       .eq('id', id)
       .maybeSingle()
       .then(({ data }) => { setMatiere(data); setLoading(false); });
