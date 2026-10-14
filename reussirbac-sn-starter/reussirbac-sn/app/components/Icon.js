@@ -13,6 +13,14 @@ const PATHS = {
   phone: <><rect x="5" y="2" width="14" height="20" rx="2" /><path d="M12 18h.01" /></>,
   shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,
   check: <path d="M20 6L9 17l-5-5" />,
+  quiz: <><circle cx="12" cy="12" r="10" /><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></>,
+  checkCircle: <><circle cx="12" cy="12" r="10" /><path d="M8 12.5l3 3 5-6" /></>,
+  circle: <circle cx="12" cy="12" r="10" />,
+  refresh: <><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16" /><path d="M3 21v-5h5" /><path d="M3 12A9 9 0 0 1 18.5 5.8L21 8" /><path d="M21 3v5h-5" /></>,
+  x: <path d="M18 6L6 18M6 6l12 12" />,
+  plus: <path d="M12 5v14M5 12h14" />,
+  wifiOff: <><path d="M2 2l20 20" /><path d="M8.5 16.4a5 5 0 0 1 7 0" /><path d="M2 8.8a15 15 0 0 1 4.2-2.6" /><path d="M10.7 5.1A15 15 0 0 1 22 8.8" /><path d="M5 12.9a10 10 0 0 1 5.2-2.7" /><path d="M12 20h.01" /></>,
+  install: <><rect x="5" y="2" width="14" height="20" rx="2" /><path d="M12 7v7" /><path d="M9 11.5l3 3 3-3" /></>,
   link: <><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" /><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" /></>,
 };
 

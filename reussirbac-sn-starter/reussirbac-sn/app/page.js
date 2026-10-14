@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
 import Icon from './components/Icon';
+import InstallButton from './components/InstallButton';
 
 const DEMO = {
   cours: { items: [['Cours complet : forme algébrique', 'PDF'], ['Vidéo : module et argument', 'Vidéo'], ['Fiche de révision', 'PDF']], foot: 'Un cours se lit dans la page, sans rien télécharger.' },
@@ -16,6 +17,11 @@ export default function Accueil() {
   const [niveaux, setNiveaux] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('cours');
+  const [connecte, setConnecte] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setConnecte(!!data.session));
+  }, []);
 
   useEffect(() => {
     supabase
@@ -31,8 +37,15 @@ export default function Accueil() {
         <Link className="lp-logo" href="/">Réussir<b>Bac</b> SN</Link>
         <nav className="lp-nav-links" aria-label="Navigation principale">
           <a className="hide-s" href="#niveaux">Classes</a>
-          <Link href="/login">Connexion</Link>
-          <Link className="lp-btn lp-btn-main" href="/inscription"><span className="long">Créer un compte</span><span className="short">S'inscrire</span></Link>
+          <Link className="hide-s" href="/moyenne">Ma moyenne</Link>
+          {connecte ? (
+            <Link className="lp-btn lp-btn-main" href="/profil">Mon profil</Link>
+          ) : (
+            <>
+              <Link href="/login">Connexion</Link>
+              <Link className="lp-btn lp-btn-main" href="/inscription"><span className="long">Créer un compte</span><span className="short">S'inscrire</span></Link>
+            </>
+          )}
         </nav>
       </header>
 
@@ -124,7 +137,13 @@ export default function Accueil() {
       <footer className="lp-footer">
         <div className="lp-wrap">
           <span>RéussirBac SN. Cours et annales pour le BFEM et le Bac au Sénégal.</span>
-          <Link href="/login">Connexion</Link>
+          <span className="foot-links">
+            <Link href="/moyenne">Calculer ma moyenne</Link>
+            <Link href="/conditions">Conditions</Link>
+            <Link href="/confidentialite">Confidentialité</Link>
+            <Link href="/contact">Contact</Link>
+            <InstallButton className="foot-install" />
+          </span>
         </div>
       </footer>
     </div>

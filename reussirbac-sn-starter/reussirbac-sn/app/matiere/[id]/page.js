@@ -8,12 +8,14 @@ import { TABS } from '../../../lib/media';
 import Icon from '../../components/Icon';
 import Topbar from '../../components/Topbar';
 import Sidebar from '../../components/Sidebar';
+import { useProgression } from '../../../lib/useProgression';
 import { SubjectGlyph } from '../../components/SubjectArt';
 
 export default function MatierePage() {
   const { id } = useParams();
   const [matiere, setMatiere] = useState(null);
   const [loading, setLoading] = useState(true);
+  const prog = useProgression();
 
   useEffect(() => {
     if (!id) return;
@@ -65,6 +67,15 @@ export default function MatierePage() {
                       return <span className="chip" key={t.key}><Icon name={t.icon} size={13} /> {n} {t.label.toLowerCase()}</span>;
                     })}
                   </div>
+                  {prog.connecte && (() => {
+                    const n = ch.publiees.filter((r) => prog.faits.has(r.id)).length;
+                    return (
+                      <div className="mini-prog">
+                        <span className="bar"><i style={{ width: `${(n / ch.publiees.length) * 100}%` }} /></span>
+                        {n} / {ch.publiees.length}
+                      </div>
+                    );
+                  })()}
                 </Link>
               ))}
             </>

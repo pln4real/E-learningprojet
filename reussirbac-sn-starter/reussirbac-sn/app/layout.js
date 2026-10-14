@@ -1,9 +1,15 @@
 import './globals.css';
+import RegisterSW from './components/RegisterSW';
 
 export const metadata = {
   title: 'RéussirBac SN',
   description: "Prépare ton BFEM et ton Bac, où que tu sois au Sénégal.",
+  manifest: '/manifest.webmanifest',
+  icons: { icon: '/icon-192.png', apple: '/apple-touch-icon.png' },
+  appleWebApp: { capable: true, title: 'RéussirBac', statusBarStyle: 'default' },
 };
+
+export const viewport = { themeColor: '#1B2168' };
 
 export default function RootLayout({ children }) {
   return (
@@ -16,7 +22,7 @@ export default function RootLayout({ children }) {
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>{children}<RegisterSW /></body>
     </html>
   );
 }

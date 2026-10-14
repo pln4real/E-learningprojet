@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
 import { TABS, aPdf, aVideo, downloadUrl, youtubeId } from '../../../lib/media';
 import { usePalier } from '../../../lib/usePalier';
+import { useProgression } from '../../../lib/useProgression';
+import QuizPlayer from '../../components/QuizPlayer';
 import Topbar from '../../components/Topbar';
 import Sidebar from '../../components/Sidebar';
 import Icon from '../../components/Icon';
@@ -13,6 +15,9 @@ import Icon from '../../components/Icon';
 export default function ChapitrePage() {
   const { id } = useParams();
   const { palier, connecte } = usePalier();
+  const prog = useProgression();
+  const [quizList, setQuizList] = useState([]);
+  const [quizId, setQuizId] = useState(null);
   const [chapitre, setChapitre] = useState(null);
   const [verrouillees, setVerrouillees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +41,17 @@ export default function ChapitrePage() {
       // Ressources réservées aux abonnés : on récupère leur titre (jamais leur lien)
       const { data: lock, error: errLock } = await supabase.rpc('ressources_verrouillees', { p_chapitre: id });
       if (!errLock && Array.isArray(lock)) setVerrouillees(lock);
+      // Quiz du chapitre (silencieux si le script SQL 06 n'est pas encore lancé)
+      const { data: qz, error: errQz } = await supabase
+        .from('quiz').select('id, titre, description, acces, statut, cree_le').eq('chapitre_id', id);
+      let quizzes = !errQz && Array.isArray(qz) ? qz.filter((q) => q.statut === 'publie') : [];
+      const { data: qzLock, error: errQzLock } = await supabase.rpc('quiz_verrouilles', { p_chapitre: id });
+      if (!errQzLock && Array.isArray(qzLock)) {
+        const deja = new Set(quizzes.map((q) => q.id));
+        quizzes = [...quizzes, ...qzLock.filter((q) => !deja.has(q.id)).map((q) => ({ ...q, verrouille: true }))];
+      }
+      quizzes.sort((a, b) => new Date(a.cree_le) - new Date(b.cree_le));
+      setQuizList(quizzes);
       setLoading(false);
     }
     load();
@@ -73,10 +89,17 @@ export default function ChapitrePage() {
   TABS.forEach((t) => { parOnglet[t.key] = toutes.filter(t.match); });
 
   // Onglet actif : celui choisi, sinon le premier qui contient quelque chose
-  const premierNonVide = TABS.find((t) => parOnglet[t.key].length > 0)?.key || TABS[0].key;
-  const activeTab = tabKey && TABS.some((t) => t.key === tabKey) ? tabKey : premierNonVide;
-  const liste = parOnglet[activeTab];
+  const tousOnglets = quizList.length > 0 ? [...TABS, { key: 'quiz', label: 'Quiz', icon: 'quiz' }] : TABS;
+  parOnglet.quiz = quizList;
+  const premierNonVide = tousOnglets.find((t) => parOnglet[t.key].length > 0)?.key || TABS[0].key;
+  const activeTab = tabKey && tousOnglets.some((t) => t.key === tabKey) ? tabKey : premierNonVide;
+  const estQuiz = activeTab === 'quiz';
+  const liste = estQuiz ? [] : parOnglet[activeTab];
   const selected = liste.find((r) => r.id === selectedId) || liste[0] || null;
+  const quizCourant = estQuiz ? (quizList.find((q) => q.id === quizId) || quizList[0]) : null;
+  const termine = selected && prog.faits.has(selected.id);
+  const nbLisibles = lisibles.length;
+  const nbFaits = lisibles.filter((r) => prog.faits.has(r.id)).length;
 
   const niveau = chapitre.matieres?.niveaux;
   const matiere = chapitre.matieres;
@@ -95,7 +118,7 @@ export default function ChapitrePage() {
   const autreVideo = !verrou && activeTab === 'cours' && selected && aVideo(selected) && aUneVideo;
   const autrePdf = !verrou && activeTab === 'video' && selected && aPdf(selected) && aUnPdf;
   const peutTelecharger = palier === 'premium';
-  const ongletCourant = TABS.find((t) => t.key === activeTab);
+  const ongletCourant = tousOnglets.find((t) => t.key === activeTab);
 
   return (
     <>
@@ -125,14 +148,21 @@ export default function ChapitrePage() {
             {chapitre.nom}
           </h1>
 
+          {prog.connecte && nbLisibles > 0 && (
+            <div className="prog-line">
+              <span>{nbFaits} / {nbLisibles} terminé{nbFaits > 1 ? 's' : ''}</span>
+              <span className="bar"><i style={{ width: `${(nbFaits / nbLisibles) * 100}%` }} /></span>
+            </div>
+          )}
+
           <div className="res-tabs" role="tablist">
-            {TABS.map((t) => (
+            {tousOnglets.map((t) => (
               <button
                 key={t.key}
                 role="tab"
                 aria-selected={activeTab === t.key}
                 className={activeTab === t.key ? 'active' : ''}
-                onClick={() => { setTabKey(t.key); setSelectedId(null); }}
+                onClick={() => { setTabKey(t.key); setSelectedId(null); setQuizId(null); }}
               >
                 <Icon name={t.icon} size={17} />
                 {t.label}
@@ -141,7 +171,7 @@ export default function ChapitrePage() {
             ))}
           </div>
 
-          {liste.length === 0 && (
+          {!estQuiz && liste.length === 0 && (
             <div className="empty-box">
               Rien dans « {ongletCourant.label} » pour ce chapitre pour l'instant.
             </div>
@@ -155,11 +185,62 @@ export default function ChapitrePage() {
                   className={`res-chip ${selected?.id === r.id ? 'active' : ''}`}
                   onClick={() => setSelectedId(r.id)}
                 >
-                  <Icon name={r.verrouille ? 'lock' : activeTab === 'video' ? 'play' : aPdf(r) ? 'file' : 'play'} size={15} />
+                  {prog.faits.has(r.id)
+                    ? <Icon name="checkCircle" size={15} className="done-ic" />
+                    : <Icon name={r.verrouille ? 'lock' : activeTab === 'video' ? 'play' : aPdf(r) ? 'file' : 'play'} size={15} />}
                   {r.titre}
                 </button>
               ))}
             </div>
+          )}
+
+          {estQuiz && (
+            <>
+              {quizList.length > 1 && (
+                <div className="res-list">
+                  {quizList.map((q) => (
+                    <button key={q.id} className={`res-chip ${quizCourant?.id === q.id ? 'active' : ''}`} onClick={() => setQuizId(q.id)}>
+                      {q.verrouille
+                        ? <Icon name="lock" size={15} />
+                        : prog.scores[q.id] ? <Icon name="checkCircle" size={15} className="done-ic" /> : <Icon name="quiz" size={15} />}
+                      {q.titre}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {quizCourant && (
+                <div className="viewer">
+                  <div className="viewer-head">
+                    <h2 className="brand-font">{quizCourant.titre}</h2>
+                    {quizCourant.description && <p>{quizCourant.description}</p>}
+                    {prog.scores[quizCourant.id] && (
+                      <p>Meilleur score : {prog.scores[quizCourant.id].score}/{prog.scores[quizCourant.id].total}</p>
+                    )}
+                  </div>
+                  {quizCourant.verrouille ? (
+                    <div className="lock-panel">
+                      <span className="lock-badge"><Icon name="lock" size={22} /></span>
+                      <h3 className="brand-font">Réservé aux abonnés</h3>
+                      {connecte ? (
+                        <p>Les abonnements ouvrent bientôt. Ce quiz sera alors disponible avec ton compte.</p>
+                      ) : (
+                        <>
+                          <p>Crée un compte gratuit pour accéder aux quiz ouverts à tous.</p>
+                          <div className="lock-actions">
+                            <Link href="/inscription" className="btn-dark">Créer un compte</Link>
+                            <Link href="/login" className="btn-light">Connexion</Link>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ padding: '0 18px 20px' }}>
+                      <QuizPlayer quiz={quizCourant} connecte={prog.connecte} userId={prog.userId} onResult={prog.noterQuiz} />
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
 
           {selected && (
@@ -203,7 +284,7 @@ export default function ChapitrePage() {
                   <button
                     type="button"
                     className="video-frame"
-                    onClick={() => setVideoOnId(selected.id)}
+                    onClick={() => { setVideoOnId(selected.id); prog.marquer(selected.id, true); }}
                     style={{ border: 0, padding: 0, cursor: 'pointer', display: 'block', width: '100%' }}
                     aria-label="Lire la vidéo"
                   >
@@ -231,7 +312,7 @@ export default function ChapitrePage() {
               {!verrou && (
                 <div className="viewer-actions">
                   {estPdf && !pdfCharge && (
-                    <button className="btn-dark" onClick={() => setPdfOnId(selected.id)}>
+                    <button className="btn-dark" onClick={() => { setPdfOnId(selected.id); prog.marquer(selected.id, true); }}>
                       <Icon name="bookOpen" size={16} /> Lire le PDF ici
                     </button>
                   )}
@@ -253,6 +334,11 @@ export default function ChapitrePage() {
                     <a className="btn-light" href={selected.url_video} target="_blank" rel="noreferrer">
                       <Icon name="external" size={15} /> Ouvrir sur YouTube
                     </a>
+                  )}
+                  {prog.connecte && (
+                    <button className={`btn-light ${termine ? 'btn-done' : ''}`} onClick={() => prog.marquer(selected.id, !termine)}>
+                      <Icon name={termine ? 'checkCircle' : 'circle'} size={15} /> {termine ? 'Terminé' : 'Marquer comme terminé'}
+                    </button>
                   )}
                   {autreVideo && (
                     <button className="btn-light" onClick={() => { setTabKey('video'); setSelectedId(selected.id); }}>

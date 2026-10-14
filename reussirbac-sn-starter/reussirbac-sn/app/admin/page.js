@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { TYPES, aPdf, aVideo, safeFileName, storagePathFromUrl } from '../../lib/media';
 import Topbar from '../components/Topbar';
 import Icon from '../components/Icon';
+import QuizAdmin from './QuizAdmin';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -97,6 +98,20 @@ export default function AdminPage() {
           >
             {editing ? 'Modifier' : 'Ajouter'}
           </button>
+          <button
+            type="button"
+            className={tab === 'eleves' ? 'active' : ''}
+            onClick={() => { setEditing(null); setTab('eleves'); }}
+          >
+            Élèves
+          </button>
+          <button
+            type="button"
+            className={tab === 'quiz' ? 'active' : ''}
+            onClick={() => { setEditing(null); setTab('quiz'); }}
+          >
+            Quiz
+          </button>
         </div>
 
         {tab === 'ajouter' && (
@@ -110,6 +125,10 @@ export default function AdminPage() {
         )}
 
         {tab === 'liste' && <ResourceList niveaux={niveaux} onEdit={startEdit} />}
+
+        {tab === 'eleves' && <StudentList />}
+
+        {tab === 'quiz' && <QuizAdmin niveaux={niveaux} />}
       </main>
     </>
   );
@@ -440,6 +459,155 @@ function ResourceList({ niveaux, onEdit }) {
               </button>
               <button className="btn-light" disabled={busyId === r.id} onClick={() => onEdit(r)}>Modifier</button>
               <button className="btn-light btn-danger" disabled={busyId === r.id} onClick={() => remove(r)}>Supprimer</button>
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Élèves : voir les comptes, changer le palier, fixer une date de fin  */
+/* ------------------------------------------------------------------ */
+const PALIERS = [
+  { key: 'gratuit', label: 'Gratuit' },
+  { key: 'abonne', label: 'Abonné' },
+  { key: 'premium', label: 'Premium' },
+];
+
+function dansJours(n) {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function StudentList() {
+  const [eleves, setEleves] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [recherche, setRecherche] = useState('');
+  const [filtre, setFiltre] = useState('');
+  const [brouillons, setBrouillons] = useState({}); // modifications non enregistrées, par élève
+  const [busyId, setBusyId] = useState(null);
+  const [okId, setOkId] = useState(null);
+
+  useEffect(() => {
+    supabase.from('profils').select('*').order('cree_le', { ascending: false }).limit(1000)
+      .then(({ data, error }) => {
+        if (error) setError(error.message);
+        setEleves(data || []);
+        setLoading(false);
+      });
+  }, []);
+
+  function valeur(e, champ) {
+    const b = brouillons[e.id];
+    if (b && champ in b) return b[champ];
+    return champ === 'palier_jusqu_au' ? (e.palier_jusqu_au || '') : e[champ];
+  }
+
+  function modifier(id, champ, v) {
+    setOkId(null);
+    setBrouillons((prev) => ({ ...prev, [id]: { ...prev[id], [champ]: v } }));
+  }
+
+  async function enregistrer(e) {
+    const palier = valeur(e, 'palier');
+    const jusqu = valeur(e, 'palier_jusqu_au') || null;
+    setBusyId(e.id); setError('');
+    const { error } = await supabase
+      .from('profils').update({ palier, palier_jusqu_au: palier === 'gratuit' ? null : jusqu }).eq('id', e.id);
+    setBusyId(null);
+    if (error) { setError(error.message); return; }
+    setEleves((prev) => prev.map((x) => (x.id === e.id ? { ...x, palier, palier_jusqu_au: palier === 'gratuit' ? null : jusqu } : x)));
+    setBrouillons((prev) => { const n = { ...prev }; delete n[e.id]; return n; });
+    setOkId(e.id);
+  }
+
+  const aujourdhui = new Date().toISOString().slice(0, 10);
+  const q = recherche.trim().toLowerCase();
+  const visibles = eleves.filter((e) => {
+    if (filtre && e.palier !== filtre) return false;
+    if (!q) return true;
+    return (e.nom_complet || '').toLowerCase().includes(q) || (e.email || '').toLowerCase().includes(q);
+  });
+  const nb = (p) => eleves.filter((e) => e.palier === p).length;
+
+  return (
+    <>
+      <div className="admin-filters">
+        <input
+          type="text" value={recherche} onChange={(e) => setRecherche(e.target.value)}
+          placeholder="Nom ou e-mail" aria-label="Chercher un élève"
+        />
+        <select value={filtre} onChange={(e) => setFiltre(e.target.value)} aria-label="Filtrer par palier">
+          <option value="">Tous les paliers</option>
+          {PALIERS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+        </select>
+      </div>
+
+      {!loading && (
+        <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '0 0 12px' }}>
+          {eleves.length} élève{eleves.length > 1 ? 's' : ''} : {nb('gratuit')} gratuit, {nb('abonne')} abonné{nb('abonne') > 1 ? 's' : ''}, {nb('premium')} premium
+        </p>
+      )}
+
+      {error && <p className="error-text">Erreur : {error}</p>}
+      {loading && <p style={{ color: 'var(--ink-soft)' }}>Chargement...</p>}
+      {!loading && visibles.length === 0 && (
+        <div className="empty-box">
+          {eleves.length === 0
+            ? "Aucun élève pour l'instant. Les comptes apparaissent ici dès qu'un élève s'inscrit."
+            : 'Aucun élève ne correspond à cette recherche.'}
+        </div>
+      )}
+
+      {visibles.map((e) => {
+        const palier = valeur(e, 'palier');
+        const jusqu = valeur(e, 'palier_jusqu_au');
+        const expire = e.palier !== 'gratuit' && e.palier_jusqu_au && e.palier_jusqu_au < aujourdhui;
+        const modifie = !!brouillons[e.id];
+        return (
+          <div className="item-card" key={e.id}>
+            <div className="item-top">
+              <div>
+                <p className="item-title">{e.nom_complet || 'Sans nom'}</p>
+                <div className="item-meta">
+                  {e.email || 'E-mail inconnu'}
+                  <br />
+                  Inscrit le {new Date(e.cree_le).toLocaleDateString('fr-FR')}
+                </div>
+              </div>
+              {expire ? (
+                <span className="badge brouillon">Expiré</span>
+              ) : (
+                <span className={`badge ${e.palier === 'gratuit' ? 'brouillon' : 'publie'}`}>
+                  {PALIERS.find((p) => p.key === e.palier)?.label}
+                </span>
+              )}
+            </div>
+
+            <div className="student-edit">
+              <div className="field">
+                <label>Palier</label>
+                <select value={palier} onChange={(ev) => modifier(e.id, 'palier', ev.target.value)}>
+                  {PALIERS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+                </select>
+              </div>
+              <div className="field">
+                <label>Valable jusqu'au (facultatif)</label>
+                <input type="date" value={jusqu} disabled={palier === 'gratuit'} onChange={(ev) => modifier(e.id, 'palier_jusqu_au', ev.target.value)} />
+              </div>
+            </div>
+
+            <div className="item-actions">
+              <button className="btn-light" disabled={palier === 'gratuit'} onClick={() => modifier(e.id, 'palier_jusqu_au', dansJours(30))}>+ 30 jours</button>
+              <button className="btn-light" disabled={palier === 'gratuit'} onClick={() => modifier(e.id, 'palier_jusqu_au', dansJours(365))}>+ 1 an</button>
+              <button className="btn-dark" disabled={!modifie || busyId === e.id} onClick={() => enregistrer(e)}>
+                {busyId === e.id ? 'Enregistrement...' : 'Enregistrer'}
+              </button>
+              {okId === e.id && <span className="success-text" style={{ margin: 0, alignSelf: 'center' }}>Enregistré</span>}
             </div>
           </div>
         );

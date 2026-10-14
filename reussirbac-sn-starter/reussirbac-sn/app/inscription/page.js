@@ -105,6 +105,10 @@ export default function InscriptionPage() {
                 <button className="btn-primary" type="submit" disabled={loading}>
                   {loading ? 'Création...' : 'Créer mon compte'}
                 </button>
+                <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '12px 0 0', lineHeight: 1.5 }}>
+                  En créant un compte, tu acceptes les <Link href="/conditions" style={{ textDecoration: 'underline' }}>conditions d'utilisation</Link> et
+                  la <Link href="/confidentialite" style={{ textDecoration: 'underline' }}>politique de confidentialité</Link>.
+                </p>
               </form>
             )}
           </div>

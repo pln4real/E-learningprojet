@@ -117,6 +117,9 @@ export default function LoginPage() {
                       <label>Mot de passe</label>
                       <input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
                     </div>
+                    <p style={{ margin: '-4px 0 14px', textAlign: 'right', fontSize: 13 }}>
+                      <Link href="/mot-de-passe-oublie" style={{ color: 'var(--green)', fontWeight: 600 }}>Mot de passe oublié ?</Link>
+                    </p>
                     <button className="btn-primary" type="submit" disabled={loading}>
                       {loading ? 'Connexion...' : 'Se connecter'}
                     </button>
