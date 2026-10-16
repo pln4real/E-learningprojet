@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
 import Icon from './components/Icon';
 import InstallButton from './components/InstallButton';
+import Parcours from './components/Parcours';
+import Pourquoi from './components/Pourquoi';
+import Rythme from './components/Rythme';
 
 const DEMO = {
   cours: { items: [['Cours complet : forme algébrique', 'PDF'], ['Vidéo : module et argument', 'Vidéo'], ['Fiche de révision', 'PDF']], foot: 'Un cours se lit dans la page, sans rien télécharger.' },
@@ -55,8 +58,17 @@ export default function Accueil() {
             <h1>Ton programme du Sénégal, clair et léger.</h1>
             <p className="lp-lead">Cours, exercices corrigés et annales pour le BFEM et le Bac, séries S2 et L2. Pensé pour ton téléphone et les connexions lentes.</p>
             <div className="lp-cta">
-              <Link className="lp-btn lp-btn-main" href="/inscription">Créer mon compte gratuit</Link>
-              <a className="lp-btn lp-btn-line" href="#niveaux">Voir les cours</a>
+              {connecte ? (
+                <>
+                  <a className="lp-btn lp-btn-main" href="#niveaux">Continuer mes cours</a>
+                  <Link className="lp-btn lp-btn-line" href="/profil">Ma progression</Link>
+                </>
+              ) : (
+                <>
+                  <Link className="lp-btn lp-btn-main" href="/inscription">Créer mon compte gratuit</Link>
+                  <a className="lp-btn lp-btn-line" href="#niveaux">Voir les cours</a>
+                </>
+              )}
             </div>
           </div>
 
@@ -85,6 +97,8 @@ export default function Accueil() {
           </div>
         </div>
 
+        <Parcours />
+
         <section className="lp-band" id="niveaux">
           <div className="lp-wrap">
             <h2 className="lp-big">Choisis ta classe.</h2>
@@ -111,6 +125,10 @@ export default function Accueil() {
           </div>
         </section>
 
+        <Pourquoi />
+
+        <Rythme />
+
         <section>
           <div className="lp-wrap lp-two">
             <div>
@@ -129,7 +147,9 @@ export default function Accueil() {
           <div className="lp-wrap">
             <h2 className="lp-big">Commence par un chapitre.</h2>
             <p className="lp-sub">Le compte est gratuit. Les premiers exercices de chaque série sont ouverts à tous.</p>
-            <Link className="lp-btn lp-btn-main" href="/inscription">Créer mon compte gratuit</Link>
+            {connecte
+              ? <a className="lp-btn lp-btn-main" href="#niveaux">Continuer mes cours</a>
+              : <Link className="lp-btn lp-btn-main" href="/inscription">Créer mon compte gratuit</Link>}
           </div>
         </section>
       </main>

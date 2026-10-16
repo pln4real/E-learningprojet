@@ -7,6 +7,9 @@ import { TYPES, aPdf, aVideo, safeFileName, storagePathFromUrl } from '../../lib
 import Topbar from '../components/Topbar';
 import Icon from '../components/Icon';
 import QuizAdmin from './QuizAdmin';
+import MessagesAdmin from './MessagesAdmin';
+import { cleChapitre } from '../../lib/texte';
+import ChapitreHint from './ChapitreHint';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -112,6 +115,13 @@ export default function AdminPage() {
           >
             Quiz
           </button>
+          <button
+            type="button"
+            className={tab === 'messages' ? 'active' : ''}
+            onClick={() => { setEditing(null); setTab('messages'); }}
+          >
+            Messages
+          </button>
         </div>
 
         {tab === 'ajouter' && (
@@ -129,6 +139,8 @@ export default function AdminPage() {
         {tab === 'eleves' && <StudentList />}
 
         {tab === 'quiz' && <QuizAdmin niveaux={niveaux} />}
+
+        {tab === 'messages' && <MessagesAdmin />}
       </main>
     </>
   );
@@ -163,6 +175,13 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
       .then(({ data }) => setMatieres(data || []));
   }, [niveauId]);
 
+  const [chapitres, setChapitres] = useState([]);
+  useEffect(() => {
+    if (!matiereId) { setChapitres([]); return; }
+    supabase.from('chapitres').select('id, nom, ordre').eq('matiere_id', matiereId).order('ordre')
+      .then(({ data }) => setChapitres(data || []));
+  }, [matiereId]);
+
   function fail(text) {
     setIsError(true);
     setMessage(text);
@@ -191,8 +210,8 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
     const nomChapitre = chapitreNom.trim();
 
     // 1. Trouve le chapitre (même nom, même matière) ou le crée
-    const { data: existant } = await supabase
-      .from('chapitres').select('id').eq('matiere_id', matiereId).eq('nom', nomChapitre).maybeSingle();
+    const { data: liste } = await supabase.from('chapitres').select('id, nom').eq('matiere_id', matiereId);
+    const existant = (liste || []).find((c) => cleChapitre(c.nom) === cleChapitre(nomChapitre));
     let chapitreId = existant?.id;
     if (!chapitreId) {
       const { data: nouveau, error: errChap } = await supabase
@@ -276,7 +295,9 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
 
         <div className="field">
           <label>Chapitre</label>
-          <input value={chapitreNom} onChange={(e) => setChapitreNom(e.target.value)} placeholder="Ex. Fonctions numériques" />
+          <input value={chapitreNom} onChange={(e) => setChapitreNom(e.target.value)} placeholder="Choisis dans la liste ou écris un nouveau chapitre" list="liste-chapitres" autoComplete="off" />
+          <datalist id="liste-chapitres">{chapitres.map((c) => <option key={c.id} value={c.nom} />)}</datalist>
+          <ChapitreHint nom={chapitreNom} chapitres={chapitres} matiereId={matiereId} />
         </div>
 
         <div className="field">

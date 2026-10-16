@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import Icon from '../components/Icon';
+import { cleChapitre } from '../../lib/texte';
+import ChapitreHint from './ChapitreHint';
 
 const LETTRES = ['A', 'B', 'C', 'D'];
 const vide = () => ({ enonce: '', options: ['', ''], bonne: 0, explication: '' });
@@ -112,6 +114,12 @@ function QuizForm({ niveaux, initial, onDone }) {
     supabase.from('matieres').select('*').eq('niveau_id', niveauId).order('ordre').then(({ data }) => setMatieres(data || []));
   }, [niveauId]);
 
+  const [chapitres, setChapitres] = useState([]);
+  useEffect(() => {
+    if (!matiereId) { setChapitres([]); return; }
+    supabase.from('chapitres').select('id, nom, ordre').eq('matiere_id', matiereId).order('ordre').then(({ data }) => setChapitres(data || []));
+  }, [matiereId]);
+
   // En modification : charge les questions existantes
   useEffect(() => {
     if (!isEdit) return;
@@ -146,7 +154,8 @@ function QuizForm({ niveaux, initial, onDone }) {
     setSaving(true);
 
     const nomChapitre = chapitreNom.trim();
-    const { data: existant } = await supabase.from('chapitres').select('id').eq('matiere_id', matiereId).eq('nom', nomChapitre).maybeSingle();
+    const { data: liste } = await supabase.from('chapitres').select('id, nom').eq('matiere_id', matiereId);
+    const existant = (liste || []).find((c) => cleChapitre(c.nom) === cleChapitre(nomChapitre));
     let chapitreId = existant?.id;
     if (!chapitreId) {
       const { data: nouveau, error: errChap } = await supabase.from('chapitres').insert({ nom: nomChapitre, matiere_id: matiereId }).select().single();
@@ -203,7 +212,9 @@ function QuizForm({ niveaux, initial, onDone }) {
         </div>
         <div className="field">
           <label>Chapitre</label>
-          <input value={chapitreNom} onChange={(e) => setChapitreNom(e.target.value)} placeholder="Même nom que le chapitre du cours" />
+          <input value={chapitreNom} onChange={(e) => setChapitreNom(e.target.value)} placeholder="Choisis dans la liste ou écris un nouveau chapitre" list="liste-chapitres-quiz" autoComplete="off" />
+          <datalist id="liste-chapitres-quiz">{chapitres.map((c) => <option key={c.id} value={c.nom} />)}</datalist>
+          <ChapitreHint nom={chapitreNom} chapitres={chapitres} matiereId={matiereId} />
         </div>
         <div className="field">
           <label>Titre du quiz</label>
