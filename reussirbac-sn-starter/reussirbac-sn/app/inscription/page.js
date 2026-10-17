@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
+import { prendreSuite } from '../../lib/abonnement';
 
 function traduire(message) {
   const m = (message || '').toLowerCase();
@@ -41,7 +42,7 @@ export default function InscriptionPage() {
 
     if (error) { setError(traduire(error.message)); return; }
     // Si la confirmation par e-mail est activée dans Supabase, il n'y a pas encore de session
-    if (data.session) router.push('/');
+    if (data.session) router.push(prendreSuite());
     else setAConfirmer(true);
   }
 

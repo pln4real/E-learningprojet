@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import Topbar from '../components/Topbar';
+import MonAbonnement from '../components/MonAbonnement';
 import Icon from '../components/Icon';
 
 const PALIERS = { gratuit: 'Gratuit', abonne: 'Abonné', premium: 'Premium' };
@@ -137,15 +138,7 @@ export default function ProfilPage() {
 
         <section className="card profil-card">
           <h2 className="brand-font">Mon abonnement</h2>
-          <div className="profil-plan">
-            <span className={`badge ${palier === 'gratuit' ? 'brouillon' : 'abonne'}`}>{PALIERS[palier]}</span>
-            <span style={{ fontSize: 14, color: 'var(--ink-soft)' }}>
-              {palier === 'gratuit' && 'Accès aux contenus gratuits. Les abonnements ouvrent bientôt.'}
-              {palier === 'abonne' && 'Accès à tous les cours, exercices et annales.'}
-              {palier === 'premium' && 'Accès complet et téléchargement des PDF.'}
-              {fin && ` Valable jusqu'au ${fin}.`}
-            </span>
-          </div>
+          <MonAbonnement userId={user.id} palier={palier} />
         </section>
 
         <section className="card profil-card">

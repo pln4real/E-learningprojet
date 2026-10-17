@@ -8,6 +8,8 @@ import Topbar from '../components/Topbar';
 import Icon from '../components/Icon';
 import QuizAdmin from './QuizAdmin';
 import MessagesAdmin from './MessagesAdmin';
+import AbonnementsAdmin from './AbonnementsAdmin';
+import SommaireEditor from './SommaireEditor';
 import { cleChapitre } from '../../lib/texte';
 import ChapitreHint from './ChapitreHint';
 
@@ -122,6 +124,13 @@ export default function AdminPage() {
           >
             Messages
           </button>
+          <button
+            type="button"
+            className={tab === 'abonnements' ? 'active' : ''}
+            onClick={() => { setEditing(null); setTab('abonnements'); }}
+          >
+            Abonnements
+          </button>
         </div>
 
         {tab === 'ajouter' && (
@@ -141,6 +150,8 @@ export default function AdminPage() {
         {tab === 'quiz' && <QuizAdmin niveaux={niveaux} />}
 
         {tab === 'messages' && <MessagesAdmin />}
+
+        {tab === 'abonnements' && <AbonnementsAdmin />}
       </main>
     </>
   );
@@ -162,6 +173,7 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
   const [description, setDescription] = useState(initial?.description || '');
   const [file, setFile] = useState(null);
   const [retirerPdf, setRetirerPdf] = useState(false);
+  const [sommaire, setSommaire] = useState(Array.isArray(initial?.sommaire) ? initial.sommaire : []);
   const [videoUrl, setVideoUrl] = useState(initial?.url_video || '');
   const [acces, setAcces] = useState(initial?.acces || 'gratuit');
   const [publie, setPublie] = useState(initial ? initial.statut === 'publie' : false);
@@ -244,6 +256,12 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
       statut: publie ? 'publie' : 'brouillon',
       acces,
     };
+    // Sommaire : seulement pour les cours. La colonne n'est écrite que si nécessaire.
+    const sommaireNet = type === 'cours' && urlFichier
+      ? sommaire.map((x) => ({ titre: String(x.titre || '').trim(), page: Number(x.page) || 1, niveau: x.niveau === 1 ? 1 : 0 })).filter((x) => x.titre)
+      : [];
+    if (sommaireNet.length > 0) row.sommaire = sommaireNet;
+    else if (isEdit && initial.sommaire) row.sommaire = null;
 
     // 3. Enregistre
     const { error } = isEdit
@@ -322,8 +340,8 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
         </div>
 
         <div className="field">
-          <label><Icon name="file" size={14} /> Support PDF (facultatif)</label>
-          <input type="file" accept="application/pdf" onChange={(e) => { setFile(e.target.files[0] || null); setRetirerPdf(false); }} />
+          <label><Icon name="file" size={14} /> {type === 'fiche' ? 'Image ou PDF de la fiche (PNG, JPG, WebP)' : 'Support PDF (facultatif)'}</label>
+          <input type="file" accept={type === 'fiche' ? 'image/png,image/jpeg,image/webp,application/pdf' : 'application/pdf'} onChange={(e) => { setFile(e.target.files[0] || null); setRetirerPdf(false); }} />
           {isEdit && initial.url_fichier && (
             <>
               <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '8px 0 0' }}>
@@ -340,6 +358,10 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
             </>
           )}
         </div>
+
+        {type === 'cours' && (file ? file.type === 'application/pdf' : !!(isEdit && initial.url_fichier && !retirerPdf)) && (
+          <SommaireEditor file={file} urlExistante={isEdit && !retirerPdf ? initial.url_fichier : null} value={sommaire} onChange={setSommaire} />
+        )}
 
         <div className="field">
           <label><Icon name="play" size={14} /> Vidéo YouTube (facultatif)</label>

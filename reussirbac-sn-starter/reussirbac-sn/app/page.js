@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
 import Icon from './components/Icon';
-import InstallButton from './components/InstallButton';
+import SiteFooter from './components/SiteFooter';
 import Parcours from './components/Parcours';
 import Pourquoi from './components/Pourquoi';
 import Rythme from './components/Rythme';
@@ -40,6 +40,7 @@ export default function Accueil() {
         <Link className="lp-logo" href="/">Réussir<b>Bac</b> SN</Link>
         <nav className="lp-nav-links" aria-label="Navigation principale">
           <a className="hide-s" href="#niveaux">Classes</a>
+          <Link className="hide-s" href="/tarifs">Tarifs</Link>
           <Link className="hide-s" href="/moyenne">Ma moyenne</Link>
           {connecte ? (
             <Link className="lp-btn lp-btn-main" href="/profil">Mon profil</Link>
@@ -154,18 +155,7 @@ export default function Accueil() {
         </section>
       </main>
 
-      <footer className="lp-footer">
-        <div className="lp-wrap">
-          <span>RéussirBac SN. Cours et annales pour le BFEM et le Bac au Sénégal.</span>
-          <span className="foot-links">
-            <Link href="/moyenne">Calculer ma moyenne</Link>
-            <Link href="/conditions">Conditions</Link>
-            <Link href="/confidentialite">Confidentialité</Link>
-            <Link href="/contact">Contact</Link>
-            <InstallButton className="foot-install" />
-          </span>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

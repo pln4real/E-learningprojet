@@ -28,7 +28,7 @@ export function storagePathFromUrl(url) {
 // URL qui force le téléchargement du fichier (Supabase Storage accepte ?download=nom)
 export function downloadUrl(url, filename) {
   if (!url) return '#';
-  const name = encodeURIComponent((filename || 'cours') + '.pdf');
+  const name = encodeURIComponent((filename || 'cours') + '.' + extensionDe(url));
   return url + (url.includes('?') ? '&' : '?') + 'download=' + name;
 }
 
@@ -44,7 +44,18 @@ export const TYPES = [
   { key: 'cours', label: 'Cours', plural: 'Cours', icon: 'book' },
   { key: 'exercice', label: 'Exercice', plural: 'Exercices', icon: 'pencil' },
   { key: 'annale', label: 'Annale', plural: 'Annales', icon: 'archive' },
+  { key: 'revision', label: 'Révision', plural: 'Révisions', icon: 'file' },
+  { key: 'fiche', label: 'Fiche visuelle', plural: 'Fiches visuelles', icon: 'image' },
 ];
+
+// Une fiche visuelle est une image (ou un PDF) : on reconnaît l'image à l'extension du fichier
+export function estImageUrl(url) {
+  return /\.(png|jpe?g|webp|gif)(\?|$)/i.test(url || '');
+}
+function extensionDe(url) {
+  const m = (url || '').split('?')[0].match(/\.([a-zA-Z0-9]{2,5})$/);
+  return m ? m[1].toLowerCase() : 'pdf';
+}
 
 // Un contenu peut avoir un PDF, une vidéo YouTube, ou les deux.
 // (les ressources verrouillées arrivent avec a_pdf / a_video, sans les liens)
@@ -62,6 +73,35 @@ export function aVideo(r) {
 export const TABS = [
   { key: 'cours', label: 'Cours', icon: 'book', match: (r) => r.type === 'cours' && (aPdf(r) || !aVideo(r)) },
   { key: 'video', label: 'Vidéo', icon: 'play', match: (r) => r.type === 'cours' && aVideo(r) },
+  { key: 'revision', label: 'Révision', icon: 'file', match: (r) => r.type === 'revision' },
+  { key: 'fiche', label: 'Fiche visuelle', icon: 'image', match: (r) => r.type === 'fiche' },
   { key: 'exercice', label: 'Exercices', icon: 'pencil', match: (r) => r.type === 'exercice' },
   { key: 'annale', label: 'Annales', icon: 'archive', match: (r) => r.type === 'annale' },
 ];
+
+// Chemin d'un fichier dans le bucket "ressources" à partir de son adresse enregistrée
+export function cheminStockage(url) {
+  if (!url) return null;
+  const i = url.indexOf('/ressources/');
+  if (i < 0) return null;
+  try { return decodeURIComponent(url.slice(i + '/ressources/'.length).split('?')[0]); } catch (e) { return null; }
+}
+
+// Ajoute à chaque ressource des liens temporaires (2 h) pour lire et télécharger le PDF.
+// Si le bucket est encore public ou si la signature échoue, on garde l'adresse d'origine.
+export async function signerRessources(supabase, ressources) {
+  return Promise.all((ressources || []).map(async (r) => {
+    const chemin = cheminStockage(r.url_fichier);
+    if (!chemin) return r;
+    const stockage = supabase.storage.from('ressources');
+    const [vue, tel] = await Promise.all([
+      stockage.createSignedUrl(chemin, 7200),
+      stockage.createSignedUrl(chemin, 7200, { download: (r.titre || 'cours') + '.' + extensionDe(chemin) }),
+    ]);
+    return {
+      ...r,
+      url_fichier_vue: vue?.data?.signedUrl || r.url_fichier,
+      url_fichier_tel: tel?.data?.signedUrl || downloadUrl(r.url_fichier, r.titre),
+    };
+  }));
+}

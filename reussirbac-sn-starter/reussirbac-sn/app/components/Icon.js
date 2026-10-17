@@ -21,6 +21,11 @@ const PATHS = {
   plus: <path d="M12 5v14M5 12h14" />,
   wifiOff: <><path d="M2 2l20 20" /><path d="M8.5 16.4a5 5 0 0 1 7 0" /><path d="M2 8.8a15 15 0 0 1 4.2-2.6" /><path d="M10.7 5.1A15 15 0 0 1 22 8.8" /><path d="M5 12.9a10 10 0 0 1 5.2-2.7" /><path d="M12 20h.01" /></>,
   install: <><rect x="5" y="2" width="14" height="20" rx="2" /><path d="M12 7v7" /><path d="M9 11.5l3 3 3-3" /></>,
+  image: <><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></>,
+  list: <><path d="M8 6h13M8 12h13M8 18h13" /><path d="M3 6h.01M3 12h.01M3 18h.01" /></>,
+  instagram: <><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><path d="M17.5 6.5h.01" /></>,
+  tiktok: <path d="M14 3v11.2a3.8 3.8 0 1 1-3.8-3.8M14 3c.3 2.7 2.1 4.6 5 4.8" />,
+  whatsapp: <><path d="M3 21l1.7-5A9 9 0 1 1 8 19.3z" /><path d="M9 9.2c.2 2.3 2.9 5.2 5.9 5.9l1.1-1.3-2.2-1.1-.9.7c-.9-.4-1.9-1.4-2.3-2.3l.7-.9-1.1-2.2z" /></>,
   link: <><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" /><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" /></>,
 };
 

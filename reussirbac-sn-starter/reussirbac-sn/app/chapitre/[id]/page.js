@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
-import { TABS, aPdf, aVideo, downloadUrl, youtubeId } from '../../../lib/media';
+import { lienPage } from '../../../lib/sommaire';
+import { TABS, aPdf, aVideo, downloadUrl, youtubeId, signerRessources, estImageUrl } from '../../../lib/media';
 import { usePalier } from '../../../lib/usePalier';
 import { useProgression } from '../../../lib/useProgression';
 import QuizPlayer from '../../components/QuizPlayer';
@@ -26,6 +27,7 @@ export default function ChapitrePage() {
   const [selectedId, setSelectedId] = useState(null);
   const [videoOnId, setVideoOnId] = useState(null); // vidéo dont le lecteur est chargé
   const [pdfOnId, setPdfOnId] = useState(null); // PDF dont le lecteur est chargé
+  const [pdfNav, setPdfNav] = useState({ id: null, page: 1 }); // page du PDF demandée par le sommaire
 
   useEffect(() => {
     if (!id) return;
@@ -36,7 +38,7 @@ export default function ChapitrePage() {
         .eq('id', id)
         .maybeSingle();
       if (error || !data) setNotFound(true);
-      else setChapitre(data);
+      else setChapitre({ ...data, ressources: await signerRessources(supabase, data.ressources) });
 
       // Ressources réservées aux abonnés : on récupère leur titre (jamais leur lien)
       const { data: lock, error: errLock } = await supabase.rpc('ressources_verrouillees', { p_chapitre: id });
@@ -89,8 +91,11 @@ export default function ChapitrePage() {
   TABS.forEach((t) => { parOnglet[t.key] = toutes.filter(t.match); });
 
   // Onglet actif : celui choisi, sinon le premier qui contient quelque chose
-  const tousOnglets = quizList.length > 0 ? [...TABS, { key: 'quiz', label: 'Quiz', icon: 'quiz' }] : TABS;
+  const tousOngletsPossibles = quizList.length > 0 ? [...TABS, { key: 'quiz', label: 'Quiz', icon: 'quiz' }] : TABS;
   parOnglet.quiz = quizList;
+  // On n'affiche que les onglets qui contiennent quelque chose (sinon, le premier, vide)
+  const garde = tousOngletsPossibles.filter((t) => parOnglet[t.key].length > 0);
+  const tousOnglets = garde.length > 0 ? garde : [TABS[0]];
   const premierNonVide = tousOnglets.find((t) => parOnglet[t.key].length > 0)?.key || TABS[0].key;
   const activeTab = tabKey && tousOnglets.some((t) => t.key === tabKey) ? tabKey : premierNonVide;
   const estQuiz = activeTab === 'quiz';
@@ -111,6 +116,10 @@ export default function ChapitrePage() {
   const aUnPdf = !!selected && !verrou && !!selected.url_fichier;
   const aUneVideo = !!selected && !verrou && !!selected.url_video;
   const estPdf = aUnPdf && montrePdf;
+  const estImage = estPdf && estImageUrl(selected.url_fichier);
+  const sommaire = estPdf && !estImage && selected.type === 'cours' && Array.isArray(selected.sommaire) && selected.sommaire.length >= 2 ? selected.sommaire : null;
+  const pageCourante = pdfNav.id === selected?.id ? pdfNav.page : 1;
+  const lienVue = selected ? lienPage(selected.url_fichier_vue || selected.url_fichier, pageCourante) : null;
   const videoId = aUneVideo && montreVideo ? youtubeId(selected.url_video) : null;
   const videoCharge = selected && videoOnId === selected.id;
   const pdfCharge = selected && pdfOnId === selected.id;
@@ -130,7 +139,7 @@ export default function ChapitrePage() {
         ]}
         action={
           estPdf && peutTelecharger ? (
-            <a className="btn-dark" href={downloadUrl(selected.url_fichier, selected.titre)}>
+            <a className="btn-dark" href={selected.url_fichier_tel || downloadUrl(selected.url_fichier, selected.titre)}>
               <Icon name="download" size={16} /> Télécharger en PDF
             </a>
           ) : null
@@ -305,24 +314,54 @@ export default function ChapitrePage() {
               )}
 
               {/* ---- PDF : lisible dans la page, chargé au clic ---- */}
-              {estPdf && pdfCharge && (
-                <iframe className="pdf-frame" src={selected.url_fichier} title={selected.titre} />
+              {sommaire && (
+                <nav className="sommaire" aria-label="Sommaire du cours">
+                  <h3 className="brand-font">Sommaire</h3>
+                  <ol>
+                    {sommaire.map((sec, i) => (
+                      <li key={i} className={`${sec.niveau === 1 ? 'sous' : ''}${pdfCharge && pageCourante === sec.page && pdfNav.id === selected.id && pdfNav.titre === sec.titre ? ' actif' : ''}`}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPdfOnId(selected.id);
+                            setPdfNav({ id: selected.id, page: sec.page, titre: sec.titre });
+                            prog.marquer(selected.id, true);
+                            setTimeout(() => document.querySelector('.pdf-frame')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+                          }}
+                        >
+                          <span>{sec.titre}</span><span className="pg">p. {sec.page}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                </nav>
+              )}
+              {estImage && (
+                <img
+                  className="fiche-img"
+                  src={selected.url_fichier_vue || selected.url_fichier}
+                  alt={selected.titre}
+                  onLoad={() => { if (!prog.faits.has(selected.id)) prog.marquer(selected.id, true); }}
+                />
+              )}
+              {estPdf && !estImage && pdfCharge && (
+                <iframe key={`${selected.id}-${pageCourante}`} className="pdf-frame" src={lienVue} title={selected.titre} />
               )}
 
               {!verrou && (
                 <div className="viewer-actions">
-                  {estPdf && !pdfCharge && (
+                  {estPdf && !estImage && !pdfCharge && (
                     <button className="btn-dark" onClick={() => { setPdfOnId(selected.id); prog.marquer(selected.id, true); }}>
                       <Icon name="bookOpen" size={16} /> Lire le PDF ici
                     </button>
                   )}
                   {estPdf && (
-                    <a className="btn-light" href={selected.url_fichier} target="_blank" rel="noreferrer">
+                    <a className="btn-light" href={lienVue} target="_blank" rel="noreferrer">
                       <Icon name="external" size={15} /> Ouvrir dans un nouvel onglet
                     </a>
                   )}
                   {estPdf && (peutTelecharger ? (
-                    <a className="btn-light" href={downloadUrl(selected.url_fichier, selected.titre)}>
+                    <a className="btn-light" href={selected.url_fichier_tel || downloadUrl(selected.url_fichier, selected.titre)}>
                       <Icon name="download" size={15} /> Télécharger
                     </a>
                   ) : (
@@ -352,7 +391,7 @@ export default function ChapitrePage() {
                   )}
                 </div>
               )}
-              {estPdf && pdfCharge && (
+              {estPdf && !estImage && pdfCharge && (
                 <p className="viewer-note">
                   Si le PDF ne s'affiche pas bien sur ton téléphone, utilise « Ouvrir dans un nouvel onglet ».
                 </p>

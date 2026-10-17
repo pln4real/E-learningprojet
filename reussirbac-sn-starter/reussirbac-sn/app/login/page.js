@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import Icon from '../components/Icon';
+import { prendreSuite } from '../../lib/abonnement';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -40,7 +41,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.verifyOtp({ phone: fullPhone, token: otp, type: 'sms' });
     setLoading(false);
     if (error) { setError(error.message); return; }
-    router.push('/');
+    router.push(prendreSuite());
   }
 
   async function handleEmailSubmit(e) {
@@ -50,7 +51,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) { setError(error.message); return; }
-    router.push('/');
+    router.push(prendreSuite());
   }
 
   return (
