@@ -887,3 +887,16 @@ input.calc-num { text-align: center; padding: 9px 4px; }
 /* overflow:hidden empêcherait le sommaire de rester fixe (sticky) ; clip garde les coins arrondis */
 .viewer { overflow: visible; overflow: clip; }
 .segmented button:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Admin : formulaire d'ajout en étapes + récapitulatif du chapitre */
+.adm-step { display: flex; align-items: center; gap: 10px; margin: 26px 0 6px; font-family: var(--display); font-size: 17px; font-weight: 800; color: var(--ink); }
+.adm-step:first-of-type { margin-top: 4px; }
+.adm-step span { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--green); color: #fff; font-size: 14px; }
+.adm-help { font-size: 13px; color: var(--ink-soft); line-height: 1.5; margin: 8px 0 0; }
+.adm-note { color: var(--green-deep); font-weight: 600; }
+.adm-deja { background: var(--green-soft); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin: 4px 0 8px; }
+.adm-deja-titre { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+.adm-slots { display: flex; flex-wrap: wrap; gap: 6px; }
+.adm-slot { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 99px; background: #fff; border: 1px solid var(--line); font-size: 13px; color: var(--ink-soft); }
+.adm-slot.ok { color: var(--green-deep); border-color: var(--green); font-weight: 600; }
+.adm-deja-liste { margin: 10px 0 0; padding-left: 18px; font-size: 13px; color: var(--ink); line-height: 1.6; }

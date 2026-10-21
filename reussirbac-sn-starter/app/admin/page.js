@@ -160,6 +160,48 @@ export default function AdminPage() {
 /* ------------------------------------------------------------------ */
 /* Formulaire : sert à AJOUTER (initial = null) et à MODIFIER           */
 /* ------------------------------------------------------------------ */
+const TYPE_AIDE = {
+  cours: 'Le cours principal : un PDF, un lien YouTube, ou les deux. Un cours avec lien YouTube apparaît aussi dans l\'onglet Vidéo.',
+  revision: 'Un résumé ou une fiche de révision (PDF).',
+  fiche: 'Une image ou un PDF visuel : schéma, carte mentale, frise.',
+  exercice: 'Des exercices, corrigés ou non (PDF).',
+  annale: 'Des sujets d\'examen (PDF).',
+};
+
+// Ce qui existe déjà dans le chapitre choisi : on voit d'un coup d'oeil ce qui est fait et ce qui manque
+function ChapitreContenus({ existants }) {
+  const compte = {
+    cours: existants.filter((r) => r.type === 'cours' && (r.url_fichier || !r.url_video)).length,
+    video: existants.filter((r) => r.type === 'cours' && r.url_video).length,
+    revision: existants.filter((r) => r.type === 'revision').length,
+    fiche: existants.filter((r) => r.type === 'fiche').length,
+    exercice: existants.filter((r) => r.type === 'exercice').length,
+    annale: existants.filter((r) => r.type === 'annale').length,
+  };
+  const cases = [['cours', 'Cours'], ['video', 'Vidéo'], ['revision', 'Révision'], ['fiche', 'Fiche visuelle'], ['exercice', 'Exercices'], ['annale', 'Annales']];
+  return (
+    <div className="adm-deja">
+      <div className="adm-deja-titre">Déjà dans ce chapitre</div>
+      <div className="adm-slots">
+        {cases.map(([k, l]) => (
+          <span key={k} className={`adm-slot ${compte[k] > 0 ? 'ok' : ''}`}>
+            {compte[k] > 0 ? <Icon name="checkCircle" size={14} /> : <Icon name="circle" size={14} />}
+            {l}{compte[k] > 0 ? ` (${compte[k]})` : ''}
+          </span>
+        ))}
+      </div>
+      {existants.length > 0 && (
+        <ul className="adm-deja-liste">
+          {existants.map((r) => (
+            <li key={r.id}>{(TYPES.find((t) => t.key === r.type)?.label) || r.type} · {r.titre}{r.statut === 'publie' ? '' : ' (brouillon)'}</li>
+          ))}
+        </ul>
+      )}
+      <p className="adm-help">Ce que tu ajoutes ici vient s'ajouter à côté de l'existant, il ne remplace jamais rien. Pour changer un contenu qui existe déjà, va dans « Mes contenus » puis « Modifier ».</p>
+    </div>
+  );
+}
+
 function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
   const isEdit = !!initial;
   const init = initial?.chapitres;
@@ -195,6 +237,17 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
       .then(({ data }) => setChapitres(data || []));
   }, [matiereId]);
 
+  const [refresh, setRefresh] = useState(0);
+  const [existants, setExistants] = useState([]);
+  const chapitreTrouve = !isEdit ? chapitres.find((c) => cleChapitre(c.nom) === cleChapitre(chapitreNom)) : null;
+  useEffect(() => {
+    if (!chapitreTrouve?.id) { setExistants([]); return; }
+    let vivant = true;
+    supabase.from('ressources').select('id, type, titre, statut, url_fichier, url_video').eq('chapitre_id', chapitreTrouve.id).order('cree_le')
+      .then(({ data }) => { if (vivant) setExistants(data || []); });
+    return () => { vivant = false; };
+  }, [chapitreTrouve?.id, refresh]);
+
   function fail(text) {
     setIsError(true);
     setMessage(text);
@@ -219,6 +272,10 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
       return;
     }
 
+    if (!isEdit) {
+      const doublon = existants.find((e) => e.type === type && (e.titre || '').trim().toLowerCase() === titre.trim().toLowerCase());
+      if (doublon && !window.confirm(`Un contenu « ${doublon.titre} » de ce type existe déjà dans ce chapitre. L'ajouter quand même en double ?`)) return;
+    }
     setSaving(true);
     const nomChapitre = chapitreNom.trim();
 
@@ -289,6 +346,7 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
       // On garde classe, matière, chapitre et type pour enchaîner ; tout le reste repart à zéro
       setTitre(''); setDescription(''); setVideoUrl(''); setFile(null); setRetirerPdf(false); setSommaire([]);
       setChampFichier((n) => n + 1);
+      setRefresh((n) => n + 1);
       if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }
@@ -304,6 +362,7 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
       {message && <p className={isError ? 'error-text' : 'success-text'}>{message}</p>}
 
       <form onSubmit={handleSubmit}>
+        <h3 className="adm-step"><span>1</span> Où ranger ce contenu ?</h3>
         <div className="admin-field-row">
           <div className="field">
             <label>Niveau</label>
@@ -327,7 +386,9 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
           <datalist id="liste-chapitres">{chapitres.map((c) => <option key={c.id} value={c.nom} />)}</datalist>
           <ChapitreHint nom={chapitreNom} chapitres={chapitres} matiereId={matiereId} />
         </div>
+        {!isEdit && chapitreTrouve && <ChapitreContenus existants={existants} />}
 
+        <h3 className="adm-step"><span>2</span> Que veux-tu ajouter ?</h3>
         <div className="field">
           <label>Type de contenu</label>
           <div className="segmented">
@@ -337,6 +398,10 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
               </button>
             ))}
           </div>
+          <p className="adm-help"><b>{TYPES.find((t) => t.key === type)?.label} : </b>{TYPE_AIDE[type]}</p>
+          {!isEdit && existants.some((e) => e.type === type) && (
+            <p className="adm-help adm-note">Ce chapitre a déjà {existants.filter((e) => e.type === type).length} contenu(s) de ce type. Le nouveau s'ajoutera à côté, il ne remplacera rien.</p>
+          )}
           {isEdit && (
             <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '8px 0 0' }}>
               Le type d'un contenu existant ne peut pas être changé. Pour une fiche visuelle ou une révision, utilise l'onglet « Ajouter ».
@@ -344,13 +409,14 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
           )}
         </div>
 
+        <h3 className="adm-step"><span>3</span> Le contenu</h3>
         <div className="field">
-          <label>Titre</label>
+          <label>Titre affiché aux élèves</label>
           <input value={titre} onChange={(e) => setTitre(e.target.value)} placeholder="Ex. Étude d'une fonction rationnelle" />
         </div>
 
         <div className="field">
-          <label>Description courte</label>
+          <label>Description courte (facultatif)</label>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
 
@@ -394,9 +460,10 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
           </div>
         </div>
 
+        <h3 className="adm-step"><span>4</span> Publication</h3>
         <label className="checkbox-row">
           <input type="checkbox" checked={publie} onChange={(e) => setPublie(e.target.checked)} />
-          Publier (visible par les élèves)
+          Publier maintenant (sinon le contenu reste en brouillon, invisible pour les élèves)
         </label>
 
         <button className="btn-primary" type="submit" disabled={saving}>
