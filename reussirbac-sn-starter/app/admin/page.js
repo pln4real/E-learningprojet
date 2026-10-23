@@ -160,6 +160,11 @@ export default function AdminPage() {
 /* ------------------------------------------------------------------ */
 /* Formulaire : sert à AJOUTER (initial = null) et à MODIFIER           */
 /* ------------------------------------------------------------------ */
+// Nom d'origine du fichier, pour que tu voies que chaque contenu a bien son propre PDF
+function nomFichier(url) {
+  try { return decodeURIComponent(String(url).split('?')[0].split('/').pop()).replace(/^\d+-(?:[a-z0-9]{1,6}-)?/, ''); } catch (e) { return ''; }
+}
+
 const TYPE_AIDE = {
   cours: 'Le cours principal : un PDF, un lien YouTube, ou les deux. Un cours avec lien YouTube apparaît aussi dans l\'onglet Vidéo.',
   revision: 'Un résumé ou une fiche de révision (PDF).',
@@ -193,7 +198,7 @@ function ChapitreContenus({ existants }) {
       {existants.length > 0 && (
         <ul className="adm-deja-liste">
           {existants.map((r) => (
-            <li key={r.id}>{(TYPES.find((t) => t.key === r.type)?.label) || r.type} · {r.titre}{r.statut === 'publie' ? '' : ' (brouillon)'}</li>
+            <li key={r.id}>{(TYPES.find((t) => t.key === r.type)?.label) || r.type} · {r.titre}{r.statut === 'publie' ? '' : ' (brouillon)'}{r.url_fichier ? <span className="adm-fichier"> — {nomFichier(r.url_fichier)}</span> : null}</li>
           ))}
         </ul>
       )}
@@ -294,8 +299,9 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
     let urlFichier = pdfExistant ? initial.url_fichier : null;
     let ancienFichier = null;
     if (file) {
-      const path = `${Date.now()}-${safeFileName(file.name)}`;
-      const { error: errUpload } = await supabase.storage.from('ressources').upload(path, file);
+      // Un dossier par chapitre et par type, un nom toujours unique : deux fichiers ne peuvent jamais se remplacer
+      const path = `${chapitreId}/${type}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeFileName(file.name)}`;
+      const { error: errUpload } = await supabase.storage.from('ressources').upload(path, file, { upsert: false });
       if (errUpload) { fail('Erreur upload : ' + errUpload.message); return; }
       urlFichier = supabase.storage.from('ressources').getPublicUrl(path).data.publicUrl;
       if (isEdit) ancienFichier = initial.url_fichier;
