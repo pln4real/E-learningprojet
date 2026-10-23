@@ -276,10 +276,17 @@ function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel 
     e.preventDefault();
     setMessage(''); setIsError(false);
 
-    if (!matiereId || !chapitreNom.trim() || !titre.trim()) {
-      fail('Merci de renseigner au moins la matière, le chapitre et le titre.');
+    if (!matiereId || !chapitreNom.trim()) {
+      fail('Choisis d\'abord la matière et le chapitre.');
       return;
     }
+    // Titre vide : on en propose un automatiquement (nom du fichier, sinon type + chapitre)
+    const libType = TYPES.find((t) => t.key === type)?.label || type;
+    const titreAuto = file
+      ? file.name.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim()
+      : `${libType} - ${chapitreNom.trim()}`;
+    const titreFinal = titre.trim() || titreAuto;
+    if (!titre.trim()) setTitre(titreFinal);
     const pdfExistant = isEdit && initial.url_fichier && !retirerPdf;
     if (!file && !pdfExistant && !videoUrl.trim()) {
       fail('Ajoute au moins un support : un fichier PDF, un lien YouTube, ou les deux.');
@@ -293,7 +300,7 @@ function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel 
     if (isEdit && file && initial.url_fichier
         && !window.confirm(`Remplacer le PDF de « ${initial.titre} » ? L'ancien PDF sera supprimé définitivement. Pour ajouter un autre contenu, annule et utilise « Ajouter un autre contenu dans ce chapitre ».`)) return;
     if (!isEdit) {
-      const doublon = existants.find((e) => e.type === type && (e.titre || '').trim().toLowerCase() === titre.trim().toLowerCase());
+      const doublon = existants.find((e) => e.type === type && (e.titre || '').trim().toLowerCase() === titreFinal.toLowerCase());
       if (doublon && !window.confirm(`Un contenu « ${doublon.titre} » de ce type existe déjà dans ce chapitre. L'ajouter quand même en double ?`)) return;
     }
     setSaving(true);
@@ -327,7 +334,7 @@ function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel 
     const row = {
       chapitre_id: chapitreId,
       type,
-      titre: titre.trim(),
+      titre: titreFinal,
       description: description.trim(),
       source: urlFichier ? 'pdf' : 'video',
       url_fichier: urlFichier,
@@ -363,7 +370,7 @@ function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel 
     } else {
       setIsError(false);
       const libelleType = (TYPES.find((t) => t.key === type)?.label || type).toLowerCase();
-      setMessage(`Ajouté : « ${titre.trim()} » (${libelleType}) dans le chapitre « ${nomChapitre} ». Les contenus déjà présents n'ont pas été touchés. Pour ajouter autre chose au même chapitre, change le type et envoie un nouveau fichier.`);
+      setMessage(`Ajouté : « ${titreFinal} » (${libelleType}) dans le chapitre « ${nomChapitre} ». Les contenus déjà présents n'ont pas été touchés. Pour ajouter autre chose au même chapitre, change le type et envoie un nouveau fichier.`);
       // On garde classe, matière, chapitre et type pour enchaîner ; tout le reste repart à zéro
       setTitre(''); setDescription(''); setVideoUrl(''); setFile(null); setRetirerPdf(false); setSommaire([]);
       setChampFichier((n) => n + 1);
@@ -441,7 +448,7 @@ function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel 
 
         <h3 className="adm-step"><span>3</span> Le contenu</h3>
         <div className="field">
-          <label>Titre affiché aux élèves</label>
+          <label>Titre affiché aux élèves (facultatif : sinon le nom du fichier est utilisé)</label>
           <input value={titre} onChange={(e) => setTitre(e.target.value)} placeholder="Ex. Étude d'une fonction rationnelle" />
         </div>
 
@@ -496,6 +503,7 @@ function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel 
           Publier maintenant (sinon le contenu reste en brouillon, invisible pour les élèves)
         </label>
 
+        {message && <p className={isError ? 'error-text' : 'success-text'} role="status">{message}</p>}
         <button className="btn-primary" type="submit" disabled={saving}>
           {saving ? 'Enregistrement...' : isEdit ? 'Enregistrer les modifications' : 'Ajouter le contenu'}
         </button>
