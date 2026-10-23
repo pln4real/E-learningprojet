@@ -19,6 +19,8 @@ export default function AdminPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [tab, setTab] = useState('liste'); // 'ajouter' | 'liste'
   const [editing, setEditing] = useState(null); // ressource en cours de modification
+  const [preset, setPreset] = useState(null); // chapitre pré-rempli pour ajouter un autre contenu
+  const [presetKey, setPresetKey] = useState(0);
   const [niveaux, setNiveaux] = useState([]);
 
   // Contrôle d'accès côté interface. La vraie protection est dans la base
@@ -71,6 +73,15 @@ export default function AdminPage() {
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  // Ajouter un AUTRE contenu dans le même chapitre : formulaire neuf, chapitre déjà rempli
+  function ajouterAutre(ressource) {
+    setEditing(null);
+    setPreset(ressource.chapitres || null);
+    setPresetKey((n) => n + 1);
+    setTab('ajouter');
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   function stopEdit() {
     setEditing(null);
     setTab('liste');
@@ -99,7 +110,7 @@ export default function AdminPage() {
           <button
             type="button"
             className={tab === 'ajouter' ? 'active' : ''}
-            onClick={() => { setEditing(null); setTab('ajouter'); }}
+            onClick={() => { setEditing(null); setPreset(null); setPresetKey((n) => n + 1); setTab('ajouter'); }}
           >
             {editing ? 'Modifier' : 'Ajouter'}
           </button>
@@ -135,15 +146,17 @@ export default function AdminPage() {
 
         {tab === 'ajouter' && (
           <ResourceForm
-            key={editing ? editing.id : 'new'}
+            key={editing ? editing.id : `new-${presetKey}`}
             niveaux={niveaux}
             initial={editing}
+            preset={editing ? null : preset}
+            onAddOther={ajouterAutre}
             onSaved={() => { setEditing(null); setTab('liste'); }}
             onCancel={editing ? stopEdit : null}
           />
         )}
 
-        {tab === 'liste' && <ResourceList niveaux={niveaux} onEdit={startEdit} />}
+        {tab === 'liste' && <ResourceList niveaux={niveaux} onEdit={startEdit} onAddOther={ajouterAutre} />}
 
         {tab === 'eleves' && <StudentList />}
 
@@ -207,9 +220,9 @@ function ChapitreContenus({ existants }) {
   );
 }
 
-function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
+function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel }) {
   const isEdit = !!initial;
-  const init = initial?.chapitres;
+  const init = initial?.chapitres || preset;
 
   const [matieres, setMatieres] = useState([]);
   const [niveauId, setNiveauId] = useState(init?.matieres?.niveaux?.id || '');
@@ -277,6 +290,8 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
       return;
     }
 
+    if (isEdit && file && initial.url_fichier
+        && !window.confirm(`Remplacer le PDF de « ${initial.titre} » ? L'ancien PDF sera supprimé définitivement. Pour ajouter un autre contenu, annule et utilise « Ajouter un autre contenu dans ce chapitre ».`)) return;
     if (!isEdit) {
       const doublon = existants.find((e) => e.type === type && (e.titre || '').trim().toLowerCase() === titre.trim().toLowerCase());
       if (doublon && !window.confirm(`Un contenu « ${doublon.titre} » de ce type existe déjà dans ce chapitre. L'ajouter quand même en double ?`)) return;
@@ -363,6 +378,15 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
         <div className="edit-banner">
           <span>Modification de « {initial.titre} »</span>
           <button type="button" className="btn-light" onClick={onCancel}>Annuler</button>
+        </div>
+      )}
+      {isEdit && (
+        <div className="adm-alerte">
+          <b>Ici, tu corriges ce contenu précis.</b> Tu ne peux pas en faire un autre type, et un nouveau PDF remplace l'ancien.
+          Pour ajouter un autre type dans ce chapitre (exercices, révision, annales…) :
+          <button type="button" className="btn-dark" style={{ marginTop: 10 }} onClick={() => onAddOther && onAddOther(initial)}>
+            <Icon name="plus" size={15} /> Ajouter un autre contenu dans ce chapitre
+          </button>
         </div>
       )}
       {message && <p className={isError ? 'error-text' : 'success-text'}>{message}</p>}
@@ -483,7 +507,7 @@ function ResourceForm({ niveaux, initial, onSaved, onCancel }) {
 /* ------------------------------------------------------------------ */
 /* Liste : voir, publier / dépublier, modifier, supprimer              */
 /* ------------------------------------------------------------------ */
-function ResourceList({ niveaux, onEdit }) {
+function ResourceList({ niveaux, onEdit, onAddOther }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -589,6 +613,7 @@ function ResourceList({ niveaux, onEdit }) {
                 {publie ? 'Dépublier' : 'Publier'}
               </button>
               <button className="btn-light" disabled={busyId === r.id} onClick={() => onEdit(r)}>Modifier</button>
+              <button className="btn-light" disabled={busyId === r.id} onClick={() => onAddOther(r)}><Icon name="plus" size={14} /> Autre type dans ce chapitre</button>
               <button className="btn-light btn-danger" disabled={busyId === r.id} onClick={() => remove(r)}>Supprimer</button>
             </div>
           </div>

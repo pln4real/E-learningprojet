@@ -902,3 +902,5 @@ input.calc-num { text-align: center; padding: 9px 4px; }
 .adm-deja-liste { margin: 10px 0 0; padding-left: 18px; font-size: 13px; color: var(--ink); line-height: 1.6; }
 
 .adm-fichier { color: var(--ink-soft); font-size: 12.5px; }
+
+.adm-alerte { background: var(--gold-soft); border: 1px solid var(--gold); border-radius: 14px; padding: 14px; margin: 0 0 14px; font-size: 14px; line-height: 1.5; color: var(--ink); }
