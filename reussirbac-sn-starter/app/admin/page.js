@@ -527,8 +527,8 @@ function ResourceList({ niveaux, onEdit, onAddOther }) {
     setLoading(true);
     const { data, error } = await supabase
       .from('ressources')
-      .select('*, chapitres(id, nom, matieres(id, nom, niveaux(id, nom)))')
-      .order('cree_le', { ascending: false });
+      .select('*, chapitres(id, nom, ordre, matieres(id, nom, ordre, niveaux(id, nom, ordre)))')
+      .order('cree_le', { ascending: true });
     if (error) setError(error.message);
     setItems(data || []);
     setLoading(false);
@@ -561,6 +561,23 @@ function ResourceList({ niveaux, onEdit, onAddOther }) {
     if (filtreNiveau && niv !== filtreNiveau) return false;
     if (filtreStatut && r.statut !== filtreStatut) return false;
     return true;
+  });
+
+  // Tri : niveau > matière > chapitre (ordre naturel 1, 2, 10) > type (cours, vidéo, exercice…)
+  const ORDRE_TYPES = ['cours', 'exercice', 'annale', 'revision', 'fiche'];
+  const nat = (a, b) => String(a || '').localeCompare(String(b || ''), 'fr', { numeric: true, sensitivity: 'base' });
+  const tries = [...visibles].sort((a, b) => {
+    const ca = a.chapitres, cb = b.chapitres;
+    const ma = ca?.matieres, mb = cb?.matieres;
+    const na = ma?.niveaux, nb = mb?.niveaux;
+    return ((na?.ordre ?? 0) - (nb?.ordre ?? 0))
+      || nat(na?.nom, nb?.nom)
+      || ((ma?.ordre ?? 0) - (mb?.ordre ?? 0))
+      || nat(ma?.nom, mb?.nom)
+      || ((ca?.ordre ?? 0) - (cb?.ordre ?? 0))
+      || nat(ca?.nom, cb?.nom)
+      || (ORDRE_TYPES.indexOf(a.type) - ORDRE_TYPES.indexOf(b.type))
+      || nat(a.titre, b.titre);
   });
 
   const nbPublies = items.filter((r) => r.statut === 'publie').length;
@@ -596,18 +613,26 @@ function ResourceList({ niveaux, onEdit, onAddOther }) {
         </div>
       )}
 
-      {visibles.map((r) => {
+      {tries.map((r, i) => {
         const chap = r.chapitres;
+        const prev = i > 0 ? tries[i - 1].chapitres : null;
+        const matNom = chap?.matieres?.nom;
+        const prevMat = prev?.matieres?.nom;
+        const nouvelleMatiere = !prev || prevMat !== matNom || prev?.matieres?.niveaux?.nom !== chap?.matieres?.niveaux?.nom;
+        const nouveauChapitre = !prev || prev.id !== chap?.id;
         const typeInfo = TYPES.find((t) => t.key === r.type);
         const publie = r.statut === 'publie';
         return (
-          <div className="item-card" key={r.id}>
+          <div key={r.id}>
+            {nouvelleMatiere && (
+              <h3 className="liste-matiere">{chap?.matieres?.niveaux?.nom} · {matNom}</h3>
+            )}
+            {nouveauChapitre && <h4 className="liste-chapitre">{chap?.nom}</h4>}
+          <div className="item-card">
             <div className="item-top">
               <div>
                 <p className="item-title">{aPdf(r) && <Icon name="file" size={15} />}{aVideo(r) && <Icon name="play" size={15} />} {r.titre}</p>
                 <div className="item-meta">
-                  {chap?.matieres?.niveaux?.nom} · {chap?.matieres?.nom} · {chap?.nom}
-                  <br />
                   {typeInfo?.label || r.type}
                 </div>
               </div>
@@ -624,6 +649,7 @@ function ResourceList({ niveaux, onEdit, onAddOther }) {
               <button className="btn-light" disabled={busyId === r.id} onClick={() => onAddOther(r)}><Icon name="plus" size={14} /> Autre type dans ce chapitre</button>
               <button className="btn-light btn-danger" disabled={busyId === r.id} onClick={() => remove(r)}>Supprimer</button>
             </div>
+          </div>
           </div>
         );
       })}

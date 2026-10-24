@@ -904,3 +904,6 @@ input.calc-num { text-align: center; padding: 9px 4px; }
 .adm-fichier { color: var(--ink-soft); font-size: 12.5px; }
 
 .adm-alerte { background: var(--gold-soft); border: 1px solid var(--gold); border-radius: 14px; padding: 14px; margin: 0 0 14px; font-size: 14px; line-height: 1.5; color: var(--ink); }
+
+.liste-matiere { font-family: var(--font-display, inherit); font-size: 17px; margin: 26px 0 4px; padding-bottom: 6px; border-bottom: 2px solid var(--green); color: var(--green-deep); }
+.liste-chapitre { font-size: 14px; font-weight: 700; margin: 16px 0 8px; color: var(--ink); }
