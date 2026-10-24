@@ -521,6 +521,10 @@ function ResourceList({ niveaux, onEdit, onAddOther }) {
   const [error, setError] = useState('');
   const [filtreNiveau, setFiltreNiveau] = useState('');
   const [filtreStatut, setFiltreStatut] = useState('');
+  const [filtreType, setFiltreType] = useState('');
+  const [recherche, setRecherche] = useState('');
+  const [fermes, setFermes] = useState({});
+  const [menuId, setMenuId] = useState(null);
   const [busyId, setBusyId] = useState(null);
 
   const load = useCallback(async () => {
@@ -535,6 +539,14 @@ function ResourceList({ niveaux, onEdit, onAddOther }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // ferme le menu « ... » au clic ailleurs
+  useEffect(() => {
+    if (!menuId) return;
+    const fermer = () => setMenuId(null);
+    document.addEventListener('click', fermer);
+    return () => document.removeEventListener('click', fermer);
+  }, [menuId]);
 
   async function toggleStatut(r) {
     setBusyId(r.id);
@@ -556,14 +568,17 @@ function ResourceList({ niveaux, onEdit, onAddOther }) {
     setBusyId(null);
   }
 
-  const visibles = items.filter((r) => {
+  const q = recherche.trim().toLowerCase();
+  const horsType = items.filter((r) => {
     const niv = r.chapitres?.matieres?.niveaux?.id;
     if (filtreNiveau && niv !== filtreNiveau) return false;
     if (filtreStatut && r.statut !== filtreStatut) return false;
+    if (q && !`${r.titre} ${r.chapitres?.nom || ''}`.toLowerCase().includes(q)) return false;
     return true;
   });
+  const visibles = filtreType ? horsType.filter((r) => r.type === filtreType) : horsType;
 
-  // Tri : niveau > matière > chapitre (ordre naturel 1, 2, 10) > type (cours, vidéo, exercice…)
+  // Tri : niveau > matière > chapitre (ordre naturel 1, 2, 10) > type
   const ORDRE_TYPES = ['cours', 'exercice', 'annale', 'revision', 'fiche'];
   const nat = (a, b) => String(a || '').localeCompare(String(b || ''), 'fr', { numeric: true, sensitivity: 'base' });
   const tries = [...visibles].sort((a, b) => {
@@ -580,11 +595,38 @@ function ResourceList({ niveaux, onEdit, onAddOther }) {
       || nat(a.titre, b.titre);
   });
 
+  // Regroupement matière > chapitre
+  const matieres = [];
+  tries.forEach((r) => {
+    const chap = r.chapitres;
+    const mat = chap?.matieres;
+    const cleMat = `${mat?.niveaux?.nom}|${mat?.nom}`;
+    let gm = matieres[matieres.length - 1];
+    if (!gm || gm.cle !== cleMat) {
+      gm = { cle: cleMat, titre: `${mat?.niveaux?.nom || ''} · ${mat?.nom || ''}`, chapitres: [] };
+      matieres.push(gm);
+    }
+    let gc = gm.chapitres[gm.chapitres.length - 1];
+    if (!gc || gc.id !== chap?.id) {
+      gc = { id: chap?.id || r.id, nom: chap?.nom || 'Sans chapitre', rows: [] };
+      gm.chapitres.push(gc);
+    }
+    gc.rows.push(r);
+  });
+
   const nbPublies = items.filter((r) => r.statut === 'publie').length;
+  const tousIds = matieres.flatMap((m) => m.chapitres.map((c) => c.id));
+  const toutReplier = () => setFermes(Object.fromEntries(tousIds.map((id) => [id, true])));
+  const toutDeplier = () => setFermes({});
+  const compte = (t) => horsType.filter((r) => r.type === t).length;
 
   return (
     <>
-      <div className="admin-filters">
+      <div className="lc-bar">
+        <div className="lc-search">
+          <Icon name="search" size={16} />
+          <input value={recherche} onChange={(e) => setRecherche(e.target.value)} placeholder="Rechercher un titre ou un chapitre" aria-label="Rechercher" />
+        </div>
         <select value={filtreNiveau} onChange={(e) => setFiltreNiveau(e.target.value)} aria-label="Filtrer par niveau">
           <option value="">Tous les niveaux</option>
           {niveaux.map((n) => <option key={n.id} value={n.id}>{n.nom}</option>)}
@@ -596,16 +638,33 @@ function ResourceList({ niveaux, onEdit, onAddOther }) {
         </select>
       </div>
 
+      <div className="lc-pills" role="tablist" aria-label="Filtrer par type">
+        <button type="button" className={`lc-pill${filtreType === '' ? ' on' : ''}`} onClick={() => setFiltreType('')}>Tous <b>{horsType.length}</b></button>
+        {TYPES.map((t) => (
+          <button type="button" key={t.key} className={`lc-pill t-${t.key}${filtreType === t.key ? ' on' : ''}`} onClick={() => setFiltreType(filtreType === t.key ? '' : t.key)}>
+            {t.plural} <b>{compte(t.key)}</b>
+          </button>
+        ))}
+      </div>
+
       {!loading && (
-        <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '0 0 12px' }}>
-          {items.length} contenu{items.length > 1 ? 's' : ''} · {nbPublies} publié{nbPublies > 1 ? 's' : ''} ·{' '}
-          {items.length - nbPublies} brouillon{items.length - nbPublies > 1 ? 's' : ''}
-        </p>
+        <div className="lc-resume">
+          <span>
+            {items.length} contenu{items.length > 1 ? 's' : ''} · {nbPublies} publié{nbPublies > 1 ? 's' : ''} ·{' '}
+            {items.length - nbPublies} brouillon{items.length - nbPublies > 1 ? 's' : ''}
+          </span>
+          {tousIds.length > 1 && (
+            <span className="lc-plier">
+              <button type="button" onClick={toutDeplier}>Tout déplier</button>
+              <button type="button" onClick={toutReplier}>Tout replier</button>
+            </span>
+          )}
+        </div>
       )}
 
       {error && <p className="error-text">Erreur : {error}</p>}
       {loading && <p style={{ color: 'var(--ink-soft)' }}>Chargement...</p>}
-      {!loading && visibles.length === 0 && (
+      {!loading && tries.length === 0 && (
         <div className="empty-box">
           {items.length === 0
             ? "Tu n'as encore rien ajouté. Passe à l'onglet « Ajouter » pour créer ton premier contenu."
@@ -613,46 +672,69 @@ function ResourceList({ niveaux, onEdit, onAddOther }) {
         </div>
       )}
 
-      {tries.map((r, i) => {
-        const chap = r.chapitres;
-        const prev = i > 0 ? tries[i - 1].chapitres : null;
-        const matNom = chap?.matieres?.nom;
-        const prevMat = prev?.matieres?.nom;
-        const nouvelleMatiere = !prev || prevMat !== matNom || prev?.matieres?.niveaux?.nom !== chap?.matieres?.niveaux?.nom;
-        const nouveauChapitre = !prev || prev.id !== chap?.id;
-        const typeInfo = TYPES.find((t) => t.key === r.type);
-        const publie = r.statut === 'publie';
-        return (
-          <div key={r.id}>
-            {nouvelleMatiere && (
-              <h3 className="liste-matiere">{chap?.matieres?.niveaux?.nom} · {matNom}</h3>
-            )}
-            {nouveauChapitre && <h4 className="liste-chapitre">{chap?.nom}</h4>}
-          <div className="item-card">
-            <div className="item-top">
-              <div>
-                <p className="item-title">{aPdf(r) && <Icon name="file" size={15} />}{aVideo(r) && <Icon name="play" size={15} />} {r.titre}</p>
-                <div className="item-meta">
-                  {typeInfo?.label || r.type}
-                </div>
+      {matieres.map((gm) => (
+        <section key={gm.cle} className="lc-matiere">
+          <h3 className="liste-matiere">{gm.titre}</h3>
+          {gm.chapitres.map((gc) => {
+            const ferme = !!fermes[gc.id];
+            const typesPresents = ORDRE_TYPES.filter((t) => gc.rows.some((r) => r.type === t));
+            return (
+              <div className="lc-chap" key={gc.id}>
+                <button type="button" className="lc-chap-head" aria-expanded={!ferme}
+                  onClick={() => setFermes((f) => ({ ...f, [gc.id]: !f[gc.id] }))}>
+                  <Icon name="chevron" size={16} className={ferme ? 'lc-chev ferme' : 'lc-chev'} />
+                  <span className="lc-chap-nom">{gc.nom}</span>
+                  <span className="lc-chap-types">
+                    {typesPresents.map((t) => <i key={t} className={`lc-dot t-${t}`} title={TYPES.find((x) => x.key === t)?.label} />)}
+                    <em>{gc.rows.length}</em>
+                  </span>
+                </button>
+                {!ferme && gc.rows.map((r) => {
+                  const typeInfo = TYPES.find((t) => t.key === r.type);
+                  const publie = r.statut === 'publie';
+                  const occupe = busyId === r.id;
+                  return (
+                    <div className="lc-row" key={r.id}>
+                      <span className={`lc-type t-${r.type}`}>{typeInfo?.label || r.type}</span>
+                      <p className="lc-titre">
+                        {aPdf(r) && <Icon name="file" size={14} />}{aVideo(r) && <Icon name="play" size={14} />}
+                        <span>{r.titre}</span>
+                        {r.acces === 'abonne' && <span className="badge abonne"><Icon name="lock" size={11} /> Abonnés</span>}
+                      </p>
+                      <span className={`badge ${publie ? 'publie' : 'brouillon'}`}>{publie ? 'Publié' : 'Brouillon'}</span>
+                      <div className="lc-actions">
+                        <button type="button" className="lc-ico" disabled={occupe} onClick={() => toggleStatut(r)}
+                          title={publie ? 'Dépublier (repasser en brouillon)' : 'Publier'} aria-label={publie ? 'Dépublier' : 'Publier'}>
+                          <Icon name={publie ? 'eyeOff' : 'eye'} size={16} />
+                        </button>
+                        <button type="button" className="lc-ico" disabled={occupe} onClick={() => onEdit(r)} title="Modifier" aria-label="Modifier">
+                          <Icon name="pencil" size={16} />
+                        </button>
+                        <div className="lc-menu-wrap">
+                          <button type="button" className="lc-ico" aria-label="Plus d'actions" aria-haspopup="menu" aria-expanded={menuId === r.id}
+                            onClick={(e) => { e.stopPropagation(); setMenuId(menuId === r.id ? null : r.id); }}>
+                            <Icon name="more" size={16} />
+                          </button>
+                          {menuId === r.id && (
+                            <div className="lc-menu" role="menu">
+                              <button type="button" role="menuitem" onClick={() => { setMenuId(null); onAddOther(r); }}>
+                                <Icon name="plus" size={14} /> Autre type dans ce chapitre
+                              </button>
+                              <button type="button" role="menuitem" className="danger" disabled={occupe} onClick={() => { setMenuId(null); remove(r); }}>
+                                <Icon name="trash" size={14} /> Supprimer
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                {r.acces === 'abonne' && <span className="badge abonne"><Icon name="lock" size={11} /> Abonnés</span>}
-                <span className={`badge ${publie ? 'publie' : 'brouillon'}`}>{publie ? 'Publié' : 'Brouillon'}</span>
-              </div>
-            </div>
-            <div className="item-actions">
-              <button className="btn-light" disabled={busyId === r.id} onClick={() => toggleStatut(r)}>
-                {publie ? 'Dépublier' : 'Publier'}
-              </button>
-              <button className="btn-light" disabled={busyId === r.id} onClick={() => onEdit(r)}>Modifier</button>
-              <button className="btn-light" disabled={busyId === r.id} onClick={() => onAddOther(r)}><Icon name="plus" size={14} /> Autre type dans ce chapitre</button>
-              <button className="btn-light btn-danger" disabled={busyId === r.id} onClick={() => remove(r)}>Supprimer</button>
-            </div>
-          </div>
-          </div>
-        );
-      })}
+            );
+          })}
+        </section>
+      ))}
     </>
   );
 }
