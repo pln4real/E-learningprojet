@@ -9,6 +9,8 @@ import Icon from '../components/Icon';
 import QuizAdmin from './QuizAdmin';
 import MessagesAdmin from './MessagesAdmin';
 import AbonnementsAdmin from './AbonnementsAdmin';
+import BibliothequeAdmin from './BibliothequeAdmin';
+import ImportLot from './ImportLot';
 import SommaireEditor from './SommaireEditor';
 import { cleChapitre } from '../../lib/texte';
 import ChapitreHint from './ChapitreHint';
@@ -142,6 +144,20 @@ export default function AdminPage() {
           >
             Abonnements
           </button>
+          <button
+            type="button"
+            className={tab === 'bibliotheque' ? 'active' : ''}
+            onClick={() => { setEditing(null); setTab('bibliotheque'); }}
+          >
+            Bibliothèque
+          </button>
+          <button
+            type="button"
+            className={tab === 'import' ? 'active' : ''}
+            onClick={() => { setEditing(null); setTab('import'); }}
+          >
+            Import en lot
+          </button>
         </div>
 
         {tab === 'ajouter' && (
@@ -165,6 +181,10 @@ export default function AdminPage() {
         {tab === 'messages' && <MessagesAdmin />}
 
         {tab === 'abonnements' && <AbonnementsAdmin />}
+
+        {tab === 'bibliotheque' && <BibliothequeAdmin niveaux={niveaux} />}
+
+        {tab === 'import' && <ImportLot niveaux={niveaux} onTermine={() => setTab('liste')} />}
       </main>
     </>
   );
@@ -362,7 +382,9 @@ function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel 
 
     // 4. Nettoie l'ancien fichier une fois la modification réussie
     const ancienChemin = storagePathFromUrl(ancienFichier);
-    if (ancienChemin) await supabase.storage.from('ressources').remove([ancienChemin]);
+    if (ancienChemin && !(await fichierPartage(ancienFichier, isEdit ? initial.id : null))) {
+      await supabase.storage.from('ressources').remove([ancienChemin]);
+    }
 
     setSaving(false);
     if (isEdit) {
@@ -515,6 +537,138 @@ function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel 
 /* ------------------------------------------------------------------ */
 /* Liste : voir, publier / dépublier, modifier, supprimer              */
 /* ------------------------------------------------------------------ */
+// Vrai si un AUTRE contenu utilise encore ce PDF (contenu réutilisé dans plusieurs classes)
+async function fichierPartage(url, sauf) {
+  if (!url) return false;
+  let q = supabase.from('ressources').select('id', { count: 'exact', head: true }).eq('url_fichier', url);
+  if (sauf) q = q.neq('id', sauf);
+  const { count } = await q;
+  return (count || 0) > 0;
+}
+
+// Réutiliser les contenus d'un chapitre dans une autre classe / matière / chapitre, sans renvoyer les PDF
+function CopieModal({ niveaux, source, contenus, onClose, onDone }) {
+  const [niveauId, setNiveauId] = useState('');
+  const [matieres, setMatieres] = useState([]);
+  const [matiereId, setMatiereId] = useState('');
+  const [chapitres, setChapitres] = useState([]);
+  const [chapitreNom, setChapitreNom] = useState('');
+  const [choisis, setChoisis] = useState(() => new Set([source.id]));
+  const [busy, setBusy] = useState(false);
+  const [erreur, setErreur] = useState('');
+
+  useEffect(() => {
+    setMatiereId(''); setMatieres([]); setChapitres([]);
+    if (!niveauId) return;
+    supabase.from('matieres').select('id, nom').eq('niveau_id', niveauId).order('ordre').then(({ data }) => setMatieres(data || []));
+  }, [niveauId]);
+  useEffect(() => {
+    setChapitres([]);
+    if (!matiereId) return;
+    supabase.from('chapitres').select('id, nom').eq('matiere_id', matiereId).order('ordre').then(({ data }) => setChapitres(data || []));
+  }, [matiereId]);
+
+  const cible = chapitres.find((c) => cleChapitre(c.nom) === cleChapitre(chapitreNom));
+  const bascule = (id) => setChoisis((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+
+  async function copier() {
+    setErreur('');
+    if (!matiereId || !chapitreNom.trim()) { setErreur('Choisis la classe, la matière et le chapitre de destination.'); return; }
+    const aCopier = contenus.filter((c) => choisis.has(c.id));
+    if (aCopier.length === 0) { setErreur('Coche au moins un contenu à réutiliser.'); return; }
+    setBusy(true);
+    let chapitreId = cible?.id;
+    if (!chapitreId) {
+      const { data: crees, error } = await supabase.from('chapitres').insert({ nom: chapitreNom.trim(), matiere_id: matiereId }).select().single();
+      if (error) { setErreur('Erreur : ' + error.message); setBusy(false); return; }
+      chapitreId = crees.id;
+    }
+    // Ne copie pas deux fois : même type + même fichier (ou même titre) déjà présent dans le chapitre de destination
+    const { data: deja } = await supabase.from('ressources').select('type, titre, url_fichier, url_video').eq('chapitre_id', chapitreId);
+    const existe = (c) => (deja || []).some((d) => d.type === c.type && (
+      (c.url_fichier && d.url_fichier === c.url_fichier) || (!c.url_fichier && c.url_video && d.url_video === c.url_video) || (d.titre || '').trim().toLowerCase() === (c.titre || '').trim().toLowerCase()));
+    const nouveaux = aCopier.filter((c) => !existe(c));
+    if (nouveaux.length === 0) { setErreur('Ces contenus existent déjà dans ce chapitre : rien à copier.'); setBusy(false); return; }
+    const lignes = nouveaux.map((c) => {
+      const l = {
+        chapitre_id: chapitreId, type: c.type, titre: c.titre, description: c.description || '',
+        source: c.source, url_fichier: c.url_fichier, url_video: c.url_video, statut: c.statut, acces: c.acces,
+      };
+      if (c.sommaire) l.sommaire = c.sommaire;
+      return l;
+    });
+    const { error } = await supabase.from('ressources').insert(lignes);
+    if (error) { setErreur('Erreur : ' + error.message); setBusy(false); return; }
+    const ignores = aCopier.length - nouveaux.length;
+    onDone(`${nouveaux.length} contenu${nouveaux.length > 1 ? 's' : ''} réutilisé${nouveaux.length > 1 ? 's' : ''} dans « ${chapitreNom.trim()} »${ignores ? ` (${ignores} déjà présent${ignores > 1 ? 's' : ''}, ignoré${ignores > 1 ? 's' : ''})` : ''}. Les PDF ne sont pas dupliqués.`);
+  }
+
+  return (
+    <div className="cm-fond" role="dialog" aria-modal="true" aria-label="Réutiliser dans une autre classe" onClick={onClose}>
+      <div className="cm-panneau" onClick={(e) => e.stopPropagation()}>
+        <h3>Réutiliser dans une autre classe</h3>
+        <p className="adm-help">Le même PDF apparaît aussi dans la destination : tu ne le renvoies pas. Chaque classe garde ensuite sa propre progression.</p>
+
+        <div className="field">
+          <label>Contenus du chapitre « {source.chapitres?.nom} » à réutiliser</label>
+          <div className="cm-liste">
+            {contenus.map((c) => (
+              <label key={c.id} className="checkbox-row">
+                <input type="checkbox" checked={choisis.has(c.id)} onChange={() => bascule(c.id)} />
+                <span className={`lc-type t-${c.type}`}>{TYPES.find((t) => t.key === c.type)?.label || c.type}</span> {c.titre}
+              </label>
+            ))}
+          </div>
+          {contenus.length > 1 && (
+            <button type="button" className="lc-lien" onClick={() => setChoisis(choisis.size === contenus.length ? new Set() : new Set(contenus.map((c) => c.id)))}>
+              {choisis.size === contenus.length ? 'Tout décocher' : 'Tout cocher'}
+            </button>
+          )}
+        </div>
+
+        <div className="admin-field-row">
+          <div className="field">
+            <label>Classe de destination</label>
+            <select value={niveauId} onChange={(e) => setNiveauId(e.target.value)}>
+              <option value="">— Choisir —</option>
+              {niveaux.map((n) => <option key={n.id} value={n.id}>{n.nom}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label>Matière</label>
+            <select value={matiereId} onChange={(e) => setMatiereId(e.target.value)} disabled={!niveauId}>
+              <option value="">— Choisir —</option>
+              {matieres.map((m) => <option key={m.id} value={m.id}>{m.nom}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="field">
+          <label>Chapitre de destination</label>
+          <input list="liste-chapitres-copie" value={chapitreNom} onChange={(e) => setChapitreNom(e.target.value)}
+            placeholder="Choisis dans la liste ou écris un nouveau chapitre" disabled={!matiereId} />
+          <datalist id="liste-chapitres-copie">{chapitres.map((c) => <option key={c.id} value={c.nom} />)}</datalist>
+          {matiereId && chapitreNom.trim() && (
+            <p className="adm-help" style={{ marginTop: 6 }}>
+              {cible ? 'Chapitre existant : les contenus y seront ajoutés.' : 'Nouveau chapitre : il sera créé.'}
+            </p>
+          )}
+        </div>
+        {niveauId && matieres.length === 0 && (
+          <p className="adm-help">Cette classe n'a pas encore cette matière : crée-la d'abord (voir le script SQL des matières).</p>
+        )}
+
+        {erreur && <p className="error-text">{erreur}</p>}
+        <div className="cm-actions">
+          <button type="button" className="btn-light" onClick={onClose} disabled={busy}>Annuler</button>
+          <button type="button" className="btn-primary" onClick={copier} disabled={busy} style={{ width: 'auto' }}>
+            {busy ? 'Copie...' : 'Réutiliser ici'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ResourceList({ niveaux, onEdit, onAddOther }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -525,6 +679,8 @@ function ResourceList({ niveaux, onEdit, onAddOther }) {
   const [recherche, setRecherche] = useState('');
   const [fermes, setFermes] = useState({});
   const [menuId, setMenuId] = useState(null);
+  const [copie, setCopie] = useState(null);
+  const [info, setInfo] = useState('');
   const [busyId, setBusyId] = useState(null);
 
   const load = useCallback(async () => {
@@ -563,7 +719,7 @@ function ResourceList({ niveaux, onEdit, onAddOther }) {
     const { error } = await supabase.from('ressources').delete().eq('id', r.id);
     if (error) { setError(error.message); setBusyId(null); return; }
     const chemin = storagePathFromUrl(r.url_fichier);
-    if (chemin) await supabase.storage.from('ressources').remove([chemin]);
+    if (chemin && !(await fichierPartage(r.url_fichier, r.id))) await supabase.storage.from('ressources').remove([chemin]);
     setItems((prev) => prev.filter((x) => x.id !== r.id));
     setBusyId(null);
   }
@@ -662,6 +818,16 @@ function ResourceList({ niveaux, onEdit, onAddOther }) {
         </div>
       )}
 
+      {info && <p className="success-text">{info}</p>}
+      {copie && (
+        <CopieModal
+          niveaux={niveaux}
+          source={copie}
+          contenus={items.filter((x) => x.chapitres?.id === copie.chapitres?.id)}
+          onClose={() => setCopie(null)}
+          onDone={(msg) => { setCopie(null); setInfo(msg); load(); }}
+        />
+      )}
       {error && <p className="error-text">Erreur : {error}</p>}
       {loading && <p style={{ color: 'var(--ink-soft)' }}>Chargement...</p>}
       {!loading && tries.length === 0 && (
@@ -717,6 +883,9 @@ function ResourceList({ niveaux, onEdit, onAddOther }) {
                           </button>
                           {menuId === r.id && (
                             <div className="lc-menu" role="menu">
+                              <button type="button" role="menuitem" onClick={() => { setMenuId(null); setInfo(''); setCopie(r); }}>
+                                <Icon name="link" size={14} /> Réutiliser dans une autre classe
+                              </button>
                               <button type="button" role="menuitem" onClick={() => { setMenuId(null); onAddOther(r); }}>
                                 <Icon name="plus" size={14} /> Autre type dans ce chapitre
                               </button>

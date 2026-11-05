@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
-import { lienPage } from '../../../lib/sommaire';
+import PdfPages from '../../components/PdfPages';
 import { TABS, aPdf, aVideo, downloadUrl, youtubeId, signerRessources, estImageUrl } from '../../../lib/media';
 import { usePalier } from '../../../lib/usePalier';
 import { useProgression } from '../../../lib/useProgression';
@@ -27,7 +27,8 @@ export default function ChapitrePage() {
   const [selectedId, setSelectedId] = useState(null);
   const [videoOnId, setVideoOnId] = useState(null); // vidéo dont le lecteur est chargé
   const [pdfOnId, setPdfOnId] = useState(null); // PDF dont le lecteur est chargé
-  const [pdfNav, setPdfNav] = useState({ id: null, page: 1 }); // page du PDF demandée par le sommaire
+  const [pdfCible, setPdfCible] = useState({ id: null, page: 1, n: 0 }); // titre du sommaire cliqué
+  const [pdfPage, setPdfPage] = useState(1); // page actuellement lue
   const [sommaireOuvert, setSommaireOuvert] = useState(false); // panneau du sommaire (téléphone)
 
   useEffect(() => {
@@ -119,8 +120,9 @@ export default function ChapitrePage() {
   const estPdf = aUnPdf && montrePdf;
   const estImage = estPdf && estImageUrl(selected.url_fichier);
   const sommaire = estPdf && !estImage && selected.type === 'cours' && Array.isArray(selected.sommaire) && selected.sommaire.length >= 2 ? selected.sommaire : null;
-  const pageCourante = pdfNav.id === selected?.id ? pdfNav.page : 1;
-  const lienVue = selected ? lienPage(selected.url_fichier_vue || selected.url_fichier, pageCourante) : null;
+  const lienVue = selected ? (selected.url_fichier_vue || selected.url_fichier) : null;
+  // Section du sommaire en cours de lecture : la dernière dont la page est atteinte
+  const sectionActive = sommaire ? sommaire.reduce((acc, sec, i) => (sec.page <= pdfPage ? i : acc), 0) : -1;
   const videoId = aUneVideo && montreVideo ? youtubeId(selected.url_video) : null;
   const videoCharge = selected && videoOnId === selected.id;
   const pdfCharge = selected && pdfOnId === selected.id;
@@ -135,18 +137,14 @@ export default function ChapitrePage() {
     return (
       <ol>
         {sommaire.map((sec, i) => (
-          <li key={i} className={`${sec.niveau === 1 ? 'sous' : ''}${pdfCharge && pageCourante === sec.page && pdfNav.id === selected.id && pdfNav.titre === sec.titre ? ' actif' : ''}`}>
+          <li key={i} className={`${sec.niveau === 1 ? 'sous' : ''}${pdfCharge && i === sectionActive ? ' actif' : ''}`}>
             <button
               type="button"
               onClick={() => {
                 setPdfOnId(selected.id);
-                setPdfNav({ id: selected.id, page: sec.page, titre: sec.titre });
+                setPdfCible({ id: selected.id, page: sec.page, n: Date.now() });
                 prog.marquer(selected.id, true);
                 if (ferme) setSommaireOuvert(false);
-                setTimeout(() => {
-                  const f = document.querySelector('.pdf-frame');
-                  if (f && f.getBoundingClientRect().top < 0) f.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 80);
               }}
             >
               <span>{sec.titre}</span><span className="pg">p. {sec.page}</span>
@@ -353,7 +351,14 @@ export default function ChapitrePage() {
                     />
                   )}
                   {estPdf && !estImage && pdfCharge && (
-                    <iframe key={`${selected.id}-${pageCourante}`} className="pdf-frame" src={lienVue} title={selected.titre} />
+                    <PdfPages
+                      key={selected.id}
+                      url={lienVue}
+                      secours={lienVue}
+                      titre={selected.titre}
+                      cible={pdfCible.id === selected.id ? pdfCible : null}
+                      onPage={setPdfPage}
+                    />
                   )}
                   {sommaire && !pdfCharge && (
                     <div className="pdf-attente">
@@ -440,7 +445,7 @@ export default function ChapitrePage() {
               )}
               {estPdf && !estImage && pdfCharge && (
                 <p className="viewer-note">
-                  Si le PDF ne s'affiche pas bien sur ton téléphone, utilise « Ouvrir dans un nouvel onglet ».
+                  Fais défiler pour lire tout le cours. Pour zoomer, écarte deux doigts sur la page.
                 </p>
               )}
             </div>

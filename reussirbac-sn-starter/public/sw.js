@@ -1,11 +1,11 @@
 // Service worker RéussirBac SN : interface rapide + page hors ligne + calculatrice.
 // Les cours, vidéos et PDF ne sont PAS stockés hors ligne (ils viennent toujours du réseau).
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL = `rb-shell-${VERSION}`;
 const STATIC = `rb-static-${VERSION}`;
 const FONTS = `rb-fonts-${VERSION}`;
-const PAGES = ['/', '/moyenne', '/hors-ligne'];
-const PRECACHE = [...PAGES, '/manifest.webmanifest', '/icon-192.png'];
+const PAGES = ['/', '/moyenne', '/hors-ligne', '/bibliotheque', '/bibliotheque/lire'];
+const PRECACHE = [...PAGES, '/manifest.webmanifest', '/icon-192.png', '/pdf.worker.min.js'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
@@ -84,7 +84,7 @@ self.addEventListener('fetch', (e) => {
   }
 
   // Icônes et manifeste
-  if (url.pathname === '/manifest.webmanifest' || url.pathname.startsWith('/icon-')) {
+  if (url.pathname === '/manifest.webmanifest' || url.pathname.startsWith('/icon-') || url.pathname === '/pdf.worker.min.js') {
     e.respondWith(caches.match(req).then((hit) => hit || fetch(req)));
   }
 });

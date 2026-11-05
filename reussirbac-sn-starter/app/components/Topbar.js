@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import MenuBurger from './MenuBurger';
 
 // Barre du haut : fil d'Ariane (Accueil › Niveau › Matière › Chapitre)
 // + une action optionnelle à droite (ex. bouton « Télécharger en PDF »).
@@ -6,6 +7,7 @@ import Link from 'next/link';
 export default function Topbar({ crumbs = [], action = null }) {
   return (
     <div className="topbar">
+      <MenuBurger className="mb-btn-barre" />
       <nav className="breadcrumb" aria-label="Fil d'Ariane">
         <Link href="/" className="crumb-home" aria-label="Accueil">Accueil</Link>
         {crumbs.map((c, i) => {

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
 import Icon from './components/Icon';
+import MenuBurger from './components/MenuBurger';
 import SiteFooter from './components/SiteFooter';
 import Parcours from './components/Parcours';
 import Pourquoi from './components/Pourquoi';
@@ -40,6 +41,7 @@ export default function Accueil() {
         <Link className="lp-logo" href="/">Réussir<b>Bac</b> SN</Link>
         <nav className="lp-nav-links" aria-label="Navigation principale">
           <a className="hide-s" href="#niveaux">Classes</a>
+          <Link className="hide-s" href="/bibliotheque">Bibliothèque</Link>
           <Link className="hide-s" href="/tarifs">Tarifs</Link>
           <Link className="hide-s" href="/moyenne">Ma moyenne</Link>
           {connecte ? (
@@ -50,6 +52,7 @@ export default function Accueil() {
               <Link className="lp-btn lp-btn-main" href="/inscription"><span className="long">Créer un compte</span><span className="short">S'inscrire</span></Link>
             </>
           )}
+          <MenuBurger className="mb-btn-lp" />
         </nav>
       </header>
 
