@@ -10,7 +10,7 @@ export async function POST(request) {
   const user = await utilisateurDepuisRequete(request);
   if (!user) return NextResponse.json({ erreur: 'Non connecté.' }, { status: 401 });
   let corps; try { corps = await request.json(); } catch { corps = {}; }
-  const reference = typeof corps?.ref === 'string' ? corps.ref : '';
+  const reference = typeof corps?.ref === 'string' ? corps.ref.slice(0, 64) : '';
 
   const db = serviceClient();
   const { data: tx } = await db.from('transactions').select('user_id').eq('reference', reference).maybeSingle();

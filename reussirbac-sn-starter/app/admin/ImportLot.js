@@ -6,7 +6,7 @@ import { TYPES, safeFileName } from '../../lib/media';
 import { cleChapitre } from '../../lib/texte';
 import { chargerPdfjs } from '../../lib/pdfjs';
 import { extraireSommaire } from '../../lib/sommaire';
-import { trouverChapitre, typeDepuisNom, titreDepuisNom, estAnnexe } from '../../lib/import';
+import { trouverChapitre, typeDepuisNom, titreDepuisNom, estAnnexe, associerCorriges } from '../../lib/import';
 import Icon from '../components/Icon';
 
 const MAX_MO = 50;
@@ -70,10 +70,21 @@ export default function ImportLot({ niveaux, onTermine }) {
       };
     });
     nouvelles.sort((a, b) => a.fichier.name.localeCompare(b.fichier.name, 'fr', { numeric: true }));
+    // Un fichier « corrigé » qui a son sujet dans le lot lui est rattaché (pas importé à part)
+    const paires = associerCorriges(nouvelles.map((l) => l.fichier.name));
+    Object.entries(paires).forEach(([ic, is]) => {
+      const c = nouvelles[Number(ic)]; const sj = nouvelles[is];
+      if (!/pdf/i.test(c.fichier.type || c.fichier.name) || c.trop) return;
+      if (sj.type !== 'exercice' && sj.type !== 'annale') { sj.type = typeDepuisNom(sj.fichier.name, 'exercice') === 'annale' ? 'annale' : 'exercice'; }
+      c.corrigeDe = Number(is); sj.aCorrige = Number(ic);
+      c.chap = sj.chap;
+    });
     setLignes(nouvelles); setFini(false);
   }
 
-  const aImporter = useMemo(() => lignes.filter((l) => l.chap !== IGNORER && l.etat !== 'ok'), [lignes]);
+  // Un corrigé rattaché à un sujet importé n'est pas importé seul
+  const rattache = (l) => l.corrigeDe != null && lignes[l.corrigeDe] && lignes[l.corrigeDe].chap !== IGNORER;
+  const aImporter = useMemo(() => lignes.filter((l) => l.chap !== IGNORER && l.etat !== 'ok' && !(l.corrigeDe != null && lignes[l.corrigeDe] && lignes[l.corrigeDe].chap !== IGNORER)), [lignes]);
 
   async function importer() {
     if (!matiereId || !aImporter.length) return;
@@ -83,6 +94,7 @@ export default function ImportLot({ niveaux, onTermine }) {
     for (let i = 0; i < lignes.length; i++) {
       const l = lignes[i];
       if (l.chap === IGNORER || l.etat === 'ok') continue;
+      if (rattache(l)) continue; // traité avec son sujet
       majLigne(i, { etat: 'envoi', msg: '' });
       try {
         let chapitreId = l.chap;
@@ -109,6 +121,14 @@ export default function ImportLot({ niveaux, onTermine }) {
           description: '', source: 'pdf', url_fichier: url, url_video: null,
           statut: publie ? 'publie' : 'brouillon', acces,
         };
+        // Corrigé rattaché : envoyé à côté du sujet
+        const lc = l.aCorrige != null ? lignes[l.aCorrige] : null;
+        if (lc && lc.chap !== IGNORER && lc.etat !== 'ok') {
+          const pathC = `${chapitreId}/corrige/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeFileName(lc.fichier.name)}`;
+          const { error: eC } = await supabase.storage.from('ressources').upload(pathC, lc.fichier, { upsert: false });
+          if (eC) throw new Error('Envoi du corrigé : ' + eC.message);
+          row.url_corrige = supabase.storage.from('ressources').getPublicUrl(pathC).data.publicUrl;
+        }
         if (l.type === 'cours' && /pdf/i.test(f.type || f.name)) {
           try {
             pdfjs = pdfjs || await chargerPdfjs();
@@ -119,10 +139,12 @@ export default function ImportLot({ niveaux, onTermine }) {
         const { error } = await supabase.from('ressources').insert(row);
         if (error) {
           await supabase.storage.from('ressources').remove([path]);
+          if (lc && /url_corrige/.test(error.message)) throw new Error("Corrigés non activés dans la base : lance le script SQL 21 dans Supabase.");
           if (/ressources_type_check/.test(error.message)) throw new Error("Type non activé dans la base : lance le script SQL 12 dans Supabase.");
           throw new Error(error.message);
         }
         majLigne(i, { etat: 'ok' });
+        if (lc && lc.chap !== IGNORER) majLigne(l.aCorrige, { etat: 'ok', msg: '' });
       } catch (e) {
         majLigne(i, { etat: 'erreur', msg: e.message });
       }
@@ -208,6 +230,8 @@ export default function ImportLot({ niveaux, onTermine }) {
                   : l.chap === NOUVEAU ? <span className="imp-b warn">Nouveau</span>
                   : l.niveau === 'verifier' ? <span className="imp-b warn">À vérifier</span>
                   : <span className="imp-b ok">Sûr</span>}
+                {l.corrigeDe != null && lignes[l.corrigeDe] && l.etat === 'attente' && l.chap !== IGNORER && <span className="imp-b ok" title={'Corrigé de : ' + lignes[l.corrigeDe].fichier.name}>Corrigé rattaché</span>}
+                {l.aCorrige != null && lignes[l.aCorrige] && l.etat === 'attente' && l.chap !== IGNORER && <span className="imp-b ok" title={'Avec le corrigé : ' + lignes[l.aCorrige].fichier.name}>+ corrigé</span>}
                 {l.doublon && l.etat === 'attente' && <span className="imp-b warn" title="Un contenu du même titre et du même type existe déjà">Doublon ?</span>}
               </div>
               {l.msg && <div className="imp-msg">{l.msg}</div>}

@@ -9,7 +9,7 @@ import { prendreSuite } from '../../lib/abonnement';
 function traduire(message) {
   const m = (message || '').toLowerCase();
   if (m.includes('already registered') || m.includes('already been registered')) return 'Un compte existe déjà avec cet e-mail. Connecte-toi plutôt.';
-  if (m.includes('password') && m.includes('characters')) return 'Le mot de passe est trop court (6 caractères minimum).';
+  if (m.includes('password') && m.includes('characters')) return 'Le mot de passe est trop court (8 caractères minimum).';
   if (m.includes('invalid') && m.includes('email')) return "Cette adresse e-mail n'est pas valide.";
   if (m.includes('rate limit')) return 'Trop de tentatives. Réessaie dans quelques minutes.';
   return message;
@@ -29,7 +29,7 @@ export default function InscriptionPage() {
     e.preventDefault();
     setError('');
     if (nom.trim().length < 2) { setError('Entre ton prénom et ton nom.'); return; }
-    if (password.length < 6) { setError('Le mot de passe doit faire au moins 6 caractères.'); return; }
+    if (password.length < 8) { setError('Le mot de passe doit faire au moins 8 caractères.'); return; }
     if (password !== confirm) { setError('Les deux mots de passe ne sont pas identiques.'); return; }
 
     setLoading(true);
@@ -97,7 +97,7 @@ export default function InscriptionPage() {
                 </div>
                 <div className="field">
                   <label>Mot de passe</label>
-                  <input type="password" placeholder="6 caractères minimum" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" />
+                  <input type="password" placeholder="8 caractères minimum" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" />
                 </div>
                 <div className="field">
                   <label>Confirme le mot de passe</label>

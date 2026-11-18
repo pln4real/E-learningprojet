@@ -74,3 +74,29 @@ export function trouverChapitre(fichier, chapitres) {
 export function estAnnexe(fichier) {
   return /garde|sommaire|annexe|presentation|couverture|index/.test(norm(fichier)) && !/lecon|chapitre|\bcours\b/.test(norm(fichier).replace(/sommaire/, ''));
 }
+
+// Corrigés : un fichier dont le nom contient « corrigé » ou « correction » peut être rattaché à son sujet
+export function estCorrige(fichier) {
+  return /\bcorrige?s?\b|\bcorrection\b/.test(norm(fichier));
+}
+// Clé commune sujet / corrigé : le nom sans les mots « corrigé », « sujet », « exercices »…
+export function cleSujet(fichier) {
+  return norm(nettoyerNom(fichier))
+    .split(' ')
+    .filter((t) => t && !/^(corrige|corriges|corrigee|corrigees|correction|corrections|sujet|sujets|exercice|exercices|exo|exos|pdf)$/.test(t))
+    .map((t) => (t.length > 3 && t.endsWith('s') ? t.slice(0, -1) : t))
+    .join(' ');
+}
+// Associe chaque corrigé au sujet qui a la même clé. Renvoie { indexCorrige: indexSujet }
+export function associerCorriges(noms) {
+  const out = {};
+  const sujets = {};
+  noms.forEach((n, i) => { if (!estCorrige(n)) { const k = cleSujet(n); if (k) (sujets[k] = sujets[k] || []).push(i); } });
+  noms.forEach((n, i) => {
+    if (!estCorrige(n)) return;
+    const k = cleSujet(n);
+    const cands = (sujets[k] || []).filter((j) => !Object.values(out).includes(j));
+    if (k && cands.length === 1) out[i] = cands[0];
+  });
+  return out;
+}

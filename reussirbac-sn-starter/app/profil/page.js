@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
+import { viderTout } from '../../lib/horsligne';
 import Topbar from '../components/Topbar';
 import MonAbonnement from '../components/MonAbonnement';
 import Icon from '../components/Icon';
@@ -83,7 +84,7 @@ export default function ProfilPage() {
   async function changerMdp(e) {
     e.preventDefault();
     setMsgPw(null);
-    if (pw.length < 6) { setMsgPw({ erreur: true, t: 'Le mot de passe doit faire au moins 6 caractères.' }); return; }
+    if (pw.length < 8) { setMsgPw({ erreur: true, t: 'Le mot de passe doit faire au moins 8 caractères.' }); return; }
     if (pw !== pw2) { setMsgPw({ erreur: true, t: 'Les deux mots de passe ne sont pas identiques.' }); return; }
     const { error } = await supabase.auth.updateUser({ password: pw });
     if (error) {
@@ -95,6 +96,7 @@ export default function ProfilPage() {
   }
 
   async function deconnexion() {
+    await viderTout(); // les chapitres téléchargés ne restent pas sur un téléphone déconnecté
     await supabase.auth.signOut();
     router.push('/');
   }
@@ -182,7 +184,7 @@ export default function ProfilPage() {
           <form onSubmit={changerMdp}>
             <div className="field">
               <label>Nouveau mot de passe</label>
-              <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="6 caractères minimum" autoComplete="new-password" />
+              <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="8 caractères minimum" autoComplete="new-password" />
             </div>
             <div className="field">
               <label>Confirme le mot de passe</label>

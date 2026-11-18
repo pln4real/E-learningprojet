@@ -29,7 +29,7 @@ export default function NouveauMotDePasse() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-    if (password.length < 6) { setError('Le mot de passe doit faire au moins 6 caractères.'); return; }
+    if (password.length < 8) { setError('Le mot de passe doit faire au moins 8 caractères.'); return; }
     if (password !== confirm) { setError('Les deux mots de passe ne sont pas identiques.'); return; }
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password });
@@ -53,7 +53,7 @@ export default function NouveauMotDePasse() {
           {error && <p className="error-text">{error}</p>}
           <div className="field">
             <label>Nouveau mot de passe</label>
-            <input type="password" placeholder="6 caractères minimum" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" />
+            <input type="password" placeholder="8 caractères minimum" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" />
           </div>
           <div className="field">
             <label>Confirme le mot de passe</label>

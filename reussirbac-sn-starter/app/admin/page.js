@@ -11,6 +11,7 @@ import MessagesAdmin from './MessagesAdmin';
 import AbonnementsAdmin from './AbonnementsAdmin';
 import BibliothequeAdmin from './BibliothequeAdmin';
 import ImportLot from './ImportLot';
+import SignalementsAdmin from './SignalementsAdmin';
 import SommaireEditor from './SommaireEditor';
 import { cleChapitre } from '../../lib/texte';
 import ChapitreHint from './ChapitreHint';
@@ -158,6 +159,13 @@ export default function AdminPage() {
           >
             Import en lot
           </button>
+          <button
+            type="button"
+            className={tab === 'signalements' ? 'active' : ''}
+            onClick={() => { setEditing(null); setTab('signalements'); }}
+          >
+            Signalements
+          </button>
         </div>
 
         {tab === 'ajouter' && (
@@ -183,6 +191,8 @@ export default function AdminPage() {
         {tab === 'abonnements' && <AbonnementsAdmin />}
 
         {tab === 'bibliotheque' && <BibliothequeAdmin niveaux={niveaux} />}
+
+        {tab === 'signalements' && <SignalementsAdmin />}
 
         {tab === 'import' && <ImportLot niveaux={niveaux} onTermine={() => setTab('liste')} />}
       </main>
@@ -255,6 +265,13 @@ function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel 
   const [retirerPdf, setRetirerPdf] = useState(false);
   const [sommaire, setSommaire] = useState(Array.isArray(initial?.sommaire) ? initial.sommaire : []);
   const [videoUrl, setVideoUrl] = useState(initial?.url_video || '');
+  // Fiche d'entraînement (exercices et annales) : tout est facultatif
+  const [corrigeFile, setCorrigeFile] = useState(null);
+  const [retirerCorrige, setRetirerCorrige] = useState(false);
+  const [duree, setDuree] = useState(initial?.duree_min ? String(initial.duree_min) : '');
+  const [bareme, setBareme] = useState(initial?.bareme ? String(initial.bareme) : '');
+  const [difficulte, setDifficulte] = useState(initial?.difficulte ? String(initial.difficulte) : '');
+  const [calculatrice, setCalculatrice] = useState(initial?.calculatrice || '');
   const [acces, setAcces] = useState(initial?.acces || 'gratuit');
   const [publie, setPublie] = useState(initial ? initial.statut === 'publie' : false);
   const [message, setMessage] = useState('');
@@ -351,6 +368,19 @@ function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel 
     // PDF retiré sans être remplacé : l'ancien fichier devient inutile
     if (isEdit && retirerPdf && !file && initial.url_fichier) ancienFichier = initial.url_fichier;
 
+    // Corrigé (exercices et annales) : un 2e PDF, rangé dans le même bucket
+    const estExo = type === 'exercice' || type === 'annale';
+    let urlCorrige = estExo && isEdit && initial.url_corrige && !retirerCorrige ? initial.url_corrige : null;
+    let ancienCorrige = null;
+    if (estExo && corrigeFile) {
+      const pathC = `${chapitreId}/corrige/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeFileName(corrigeFile.name)}`;
+      const { error: errC } = await supabase.storage.from('ressources').upload(pathC, corrigeFile, { upsert: false });
+      if (errC) { fail('Erreur upload du corrigé : ' + errC.message); return; }
+      urlCorrige = supabase.storage.from('ressources').getPublicUrl(pathC).data.publicUrl;
+      if (isEdit && initial.url_corrige) ancienCorrige = initial.url_corrige;
+    }
+    if (isEdit && initial.url_corrige && !corrigeFile && (retirerCorrige || !estExo)) ancienCorrige = initial.url_corrige;
+
     const row = {
       chapitre_id: chapitreId,
       type,
@@ -362,6 +392,17 @@ function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel 
       statut: publie ? 'publie' : 'brouillon',
       acces,
     };
+    // Fiche d'entraînement : les colonnes ne sont écrites que si elles servent (script SQL 21)
+    const fiche = {
+      duree_min: estExo && duree ? Math.min(360, Math.max(5, parseInt(duree, 10) || 0)) || null : null,
+      bareme: estExo && bareme ? Math.min(40, Math.max(1, parseInt(bareme, 10) || 0)) || null : null,
+      difficulte: estExo && difficulte ? parseInt(difficulte, 10) : null,
+      calculatrice: estExo && calculatrice ? calculatrice : null,
+      url_corrige: urlCorrige,
+    };
+    Object.keys(fiche).forEach((k) => {
+      if (fiche[k] !== null || (isEdit && initial[k] != null)) row[k] = fiche[k];
+    });
     // Sommaire : seulement pour les cours. La colonne n'est écrite que si nécessaire.
     const sommaireNet = type === 'cours' && urlFichier
       ? sommaire.map((x) => ({ titre: String(x.titre || '').trim(), page: Number(x.page) || 1, niveau: x.niveau === 1 ? 1 : 0 })).filter((x) => x.titre)
@@ -374,13 +415,19 @@ function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel 
       ? await supabase.from('ressources').update(row).eq('id', initial.id)
       : await supabase.from('ressources').insert(row);
     if (error) {
-      if (/ressources_type_check/.test(error.message)) {
+      if (/duree_min|bareme|difficulte|calculatrice|url_corrige|ressources_(duree|bareme)_check/.test(error.message)) {
+        fail("La fiche d'entraînement (durée, barème, difficulté, corrigé) n'est pas encore activée dans la base. Lance d'abord le script SQL 21 dans Supabase (SQL Editor), puis réessaie.");
+      } else if (/ressources_type_check/.test(error.message)) {
         fail("Ce type de contenu (Révision ou Fiche visuelle) n'est pas encore activé dans la base. Lance d'abord le script SQL 12 dans Supabase (SQL Editor), puis réessaie.");
       } else fail('Erreur : ' + error.message);
       return;
     }
 
-    // 4. Nettoie l'ancien fichier une fois la modification réussie
+    // 4. Nettoie l'ancien corrigé, puis l'ancien fichier, une fois la modification réussie
+    const ancienCheminC = storagePathFromUrl(ancienCorrige);
+    if (ancienCheminC && !(await fichierPartage(ancienCorrige, isEdit ? initial.id : null, 'url_corrige'))) {
+      await supabase.storage.from('ressources').remove([ancienCheminC]);
+    }
     const ancienChemin = storagePathFromUrl(ancienFichier);
     if (ancienChemin && !(await fichierPartage(ancienFichier, isEdit ? initial.id : null))) {
       await supabase.storage.from('ressources').remove([ancienChemin]);
@@ -395,6 +442,7 @@ function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel 
       setMessage(`Ajouté : « ${titreFinal} » (${libelleType}) dans le chapitre « ${nomChapitre} ». Les contenus déjà présents n'ont pas été touchés. Pour ajouter autre chose au même chapitre, change le type et envoie un nouveau fichier.`);
       // On garde classe, matière, chapitre et type pour enchaîner ; tout le reste repart à zéro
       setTitre(''); setDescription(''); setVideoUrl(''); setFile(null); setRetirerPdf(false); setSommaire([]);
+      setCorrigeFile(null); setRetirerCorrige(false); setDuree(''); setBareme(''); setDifficulte(''); setCalculatrice('');
       setChampFichier((n) => n + 1);
       setRefresh((n) => n + 1);
       if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -503,6 +551,57 @@ function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel 
           <SommaireEditor file={file} urlExistante={isEdit && !retirerPdf ? initial.url_fichier : null} value={sommaire} onChange={setSommaire} />
         )}
 
+        {(type === 'exercice' || type === 'annale') && (
+          <div className="field adm-fiche">
+            <label><Icon name="timer" size={14} /> Fiche d'entraînement (facultatif)</label>
+            <p className="adm-help" style={{ marginTop: 0 }}>Ces informations s'affichent dans l'Atelier d'entraînement. Sans durée, l'Atelier compte 60 minutes par sujet.</p>
+            <div className="admin-field-row">
+              <div className="field">
+                <label>Durée conseillée (minutes)</label>
+                <input type="number" min="5" max="360" inputMode="numeric" value={duree} onChange={(e) => setDuree(e.target.value)} placeholder="Ex. 45" />
+              </div>
+              <div className="field">
+                <label>Barème (points)</label>
+                <input type="number" min="1" max="40" inputMode="numeric" value={bareme} onChange={(e) => setBareme(e.target.value)} placeholder="Ex. 4" />
+              </div>
+            </div>
+            <div className="admin-field-row">
+              <div className="field">
+                <label>Difficulté</label>
+                <select value={difficulte} onChange={(e) => setDifficulte(e.target.value)}>
+                  <option value="">Non précisée</option>
+                  <option value="1">Accessible</option>
+                  <option value="2">Abordable</option>
+                  <option value="3">Exigeant</option>
+                </select>
+              </div>
+              <div className="field">
+                <label>Calculatrice</label>
+                <select value={calculatrice} onChange={(e) => setCalculatrice(e.target.value)}>
+                  <option value="">Non précisée</option>
+                  <option value="autorisee">Autorisée</option>
+                  <option value="interdite">Interdite</option>
+                </select>
+              </div>
+            </div>
+            <label style={{ marginTop: 6 }}><Icon name="eye" size={14} /> Corrigé en PDF (facultatif)</label>
+            <input key={'c' + champFichier} type="file" accept="application/pdf" onChange={(e) => { setCorrigeFile(e.target.files[0] || null); setRetirerCorrige(false); }} />
+            {isEdit && initial.url_corrige && (
+              <>
+                <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '8px 0 0' }}>
+                  {retirerCorrige ? 'Le corrigé actuel sera supprimé à l\'enregistrement.' : 'Un corrigé est déjà enregistré. Choisis un nouveau fichier seulement pour le remplacer.'}
+                </p>
+                {!corrigeFile && (
+                  <label className="checkbox-row" style={{ margin: '8px 0 0' }}>
+                    <input type="checkbox" checked={retirerCorrige} onChange={(e) => setRetirerCorrige(e.target.checked)} />
+                    Retirer le corrigé actuel
+                  </label>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         <div className="field">
           <label><Icon name="play" size={14} /> Vidéo YouTube (facultatif)</label>
           <input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=..." />
@@ -538,9 +637,9 @@ function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel 
 /* Liste : voir, publier / dépublier, modifier, supprimer              */
 /* ------------------------------------------------------------------ */
 // Vrai si un AUTRE contenu utilise encore ce PDF (contenu réutilisé dans plusieurs classes)
-async function fichierPartage(url, sauf) {
+async function fichierPartage(url, sauf, colonne = 'url_fichier') {
   if (!url) return false;
-  let q = supabase.from('ressources').select('id', { count: 'exact', head: true }).eq('url_fichier', url);
+  let q = supabase.from('ressources').select('id', { count: 'exact', head: true }).eq(colonne, url);
   if (sauf) q = q.neq('id', sauf);
   const { count } = await q;
   return (count || 0) > 0;
@@ -595,6 +694,7 @@ function CopieModal({ niveaux, source, contenus, onClose, onDone }) {
         source: c.source, url_fichier: c.url_fichier, url_video: c.url_video, statut: c.statut, acces: c.acces,
       };
       if (c.sommaire) l.sommaire = c.sommaire;
+      ['duree_min', 'bareme', 'difficulte', 'calculatrice', 'url_corrige'].forEach((k) => { if (c[k] != null) l[k] = c[k]; });
       return l;
     });
     const { error } = await supabase.from('ressources').insert(lignes);
@@ -720,6 +820,8 @@ function ResourceList({ niveaux, onEdit, onAddOther }) {
     if (error) { setError(error.message); setBusyId(null); return; }
     const chemin = storagePathFromUrl(r.url_fichier);
     if (chemin && !(await fichierPartage(r.url_fichier, r.id))) await supabase.storage.from('ressources').remove([chemin]);
+    const cheminC = storagePathFromUrl(r.url_corrige);
+    if (cheminC && !(await fichierPartage(r.url_corrige, r.id, 'url_corrige'))) await supabase.storage.from('ressources').remove([cheminC]);
     setItems((prev) => prev.filter((x) => x.id !== r.id));
     setBusyId(null);
   }

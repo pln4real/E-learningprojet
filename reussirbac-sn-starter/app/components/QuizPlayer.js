@@ -7,7 +7,7 @@ import Icon from './Icon';
 const LETTRES = ['A', 'B', 'C', 'D'];
 
 // Lecteur de quiz : une question à la fois, correction immédiate, score final.
-export default function QuizPlayer({ quiz, connecte, userId, onResult }) {
+export default function QuizPlayer({ quiz, connecte, userId, onResult, questionsLocales, enAttente }) {
   const [questions, setQuestions] = useState(null);
   const [erreur, setErreur] = useState('');
   const [i, setI] = useState(0);
@@ -15,10 +15,13 @@ export default function QuizPlayer({ quiz, connecte, userId, onResult }) {
   const [score, setScore] = useState(0);
   const [fini, setFini] = useState(false);
   const [enregistre, setEnregistre] = useState(false);
+  const [gardeLocal, setGardeLocal] = useState(false);
 
   useEffect(() => {
     let actif = true;
-    setQuestions(null); setErreur(''); setI(0); setChoix(null); setScore(0); setFini(false); setEnregistre(false);
+    setQuestions(null); setErreur(''); setI(0); setChoix(null); setScore(0); setFini(false); setEnregistre(false); setGardeLocal(false);
+    // Quiz téléchargé : les questions viennent du téléphone, pas du réseau
+    if (questionsLocales) { setQuestions(questionsLocales); return () => { actif = false; }; }
     supabase.from('quiz_questions').select('*').eq('quiz_id', quiz.id).order('ordre')
       .then(({ data, error }) => {
         if (!actif) return;
@@ -26,13 +29,19 @@ export default function QuizPlayer({ quiz, connecte, userId, onResult }) {
         else setQuestions(data || []);
       });
     return () => { actif = false; };
-  }, [quiz.id]);
+  }, [quiz.id, questionsLocales]);
 
   async function terminer(scoreFinal, total) {
     setFini(true);
     if (connecte && userId) {
-      const { error } = await supabase.from('quiz_resultats').insert({ user_id: userId, quiz_id: quiz.id, score: scoreFinal, total });
-      if (!error) { setEnregistre(true); onResult && onResult(quiz.id, scoreFinal, total); }
+      const horsReseau = typeof navigator !== 'undefined' && navigator.onLine === false;
+      let erreurEnvoi = horsReseau;
+      if (!horsReseau) {
+        const { error } = await supabase.from('quiz_resultats').insert({ user_id: userId, quiz_id: quiz.id, score: scoreFinal, total });
+        if (!error) { setEnregistre(true); onResult && onResult(quiz.id, scoreFinal, total); } else erreurEnvoi = true;
+      }
+      // Pas de réseau : le score est gardé dans le téléphone et envoyé plus tard
+      if (erreurEnvoi && enAttente) { try { await enAttente(quiz.id, scoreFinal, total); setGardeLocal(true); } catch (e) { /* tant pis */ } }
     }
   }
 
@@ -55,6 +64,7 @@ export default function QuizPlayer({ quiz, connecte, userId, onResult }) {
         </p>
         {!connecte && <p className="qz-hint">Crée un compte gratuit pour enregistrer tes scores.</p>}
         {enregistre && <p className="qz-hint"><Icon name="check" size={14} /> Score enregistré</p>}
+        {gardeLocal && <p className="qz-hint"><Icon name="check" size={14} /> Score gardé sur ton téléphone : il sera enregistré à ta prochaine connexion.</p>}
         <button className="btn-dark" onClick={recommencer}><Icon name="refresh" size={16} /> Recommencer</button>
       </div>
     );

@@ -20,8 +20,8 @@ export async function POST(request) {
 
   let corps;
   try { corps = await request.json(); } catch { return NextResponse.json({ erreur: 'Requête invalide.' }, { status: 400 }); }
-  const plan = typeof corps?.plan === 'string' ? corps.plan : '';
-  const niveau = typeof corps?.niveau === 'string' && corps.niveau ? corps.niveau : null;
+  const plan = typeof corps?.plan === 'string' ? corps.plan.slice(0, 40) : '';
+  const niveau = typeof corps?.niveau === 'string' && /^[0-9a-f-]{36}$/i.test(corps.niveau) ? corps.niveau : null;
 
   const db = serviceClient();
   // Le serveur lit le prix dans la base : le navigateur ne peut pas l'imposer.

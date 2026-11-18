@@ -57,7 +57,10 @@ export default function MenuBurger({ className = '' }) {
             {(niveaux || []).map((n) => lien(`/classe/${n.id}`, n.nom))}
 
             <p className="mb-titre">Outils</p>
+            {lien('/atelier', 'Atelier d\'entraînement')}
+            {lien('/amis', 'Mon cercle')}
             {lien('/bibliotheque', 'Bibliothèque')}
+            {lien('/hors-ligne', 'Mes téléchargements')}
             {lien('/moyenne', 'Ma moyenne')}
             {lien('/tarifs', 'Tarifs et abonnements')}
             {lien('/contact', 'Nous contacter')}

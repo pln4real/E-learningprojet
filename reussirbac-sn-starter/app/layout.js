@@ -1,5 +1,6 @@
 import './globals.css';
 import RegisterSW from './components/RegisterSW';
+import SynchroHorsLigne from './components/SynchroHorsLigne';
 
 export const metadata = {
   title: 'RéussirBac SN',
@@ -22,7 +23,7 @@ export default function RootLayout({ children }) {
           rel="stylesheet"
         />
       </head>
-      <body>{children}<RegisterSW /></body>
+      <body>{children}<RegisterSW /><SynchroHorsLigne /></body>
     </html>
   );
 }

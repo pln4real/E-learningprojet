@@ -1,6 +1,7 @@
 // Service worker RéussirBac SN : interface rapide + page hors ligne + calculatrice.
-// Les cours, vidéos et PDF ne sont PAS stockés hors ligne (ils viennent toujours du réseau).
-const VERSION = 'v2';
+// Les chapitres téléchargés par l'élève sont gardés dans IndexedDB (voir lib/horsligne.js), pas ici.
+// Ce fichier garde seulement l'application elle-même (page /hors-ligne, scripts) pour qu'elle s'ouvre sans réseau.
+const VERSION = 'v3';
 const SHELL = `rb-shell-${VERSION}`;
 const STATIC = `rb-static-${VERSION}`;
 const FONTS = `rb-fonts-${VERSION}`;

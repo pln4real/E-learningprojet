@@ -5,18 +5,20 @@ import { supabase } from '../../lib/supabaseClient';
 import Icon from '../components/Icon';
 import { cleChapitre } from '../../lib/texte';
 import ChapitreHint from './ChapitreHint';
+import ImportQuiz from './ImportQuiz';
 
 const LETTRES = ['A', 'B', 'C', 'D'];
 const vide = () => ({ enonce: '', options: ['', ''], bonne: 0, explication: '' });
 
 export default function QuizAdmin({ niveaux }) {
   const [editing, setEditing] = useState(null); // quiz en cours de modification, ou 'new'
+  if (editing === 'import') return <ImportQuiz niveaux={niveaux} onFini={() => setEditing(null)} />;
   return editing
     ? <QuizForm niveaux={niveaux} initial={editing === 'new' ? null : editing} onDone={() => setEditing(null)} />
-    : <QuizList onNew={() => setEditing('new')} onEdit={setEditing} />;
+    : <QuizList onNew={() => setEditing('new')} onImport={() => setEditing('import')} onEdit={setEditing} />;
 }
 
-function QuizList({ onNew, onEdit }) {
+function QuizList({ onNew, onImport, onEdit }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -55,7 +57,10 @@ function QuizList({ onNew, onEdit }) {
   return (
     <>
       <div style={{ marginBottom: 14 }}>
-        <button className="btn-dark" onClick={onNew}><Icon name="plus" size={16} /> Nouveau quiz</button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn-dark" onClick={onNew}><Icon name="plus" size={16} /> Nouveau quiz</button>
+          <button className="btn-dark" onClick={onImport}><Icon name="archive" size={16} /> Importer des quiz</button>
+        </div>
       </div>
       {error && <p className="error-text">{error}</p>}
       {loading && <p style={{ color: 'var(--ink-soft)' }}>Chargement...</p>}

@@ -12,6 +12,8 @@ import QuizPlayer from '../../components/QuizPlayer';
 import Topbar from '../../components/Topbar';
 import Sidebar from '../../components/Sidebar';
 import Icon from '../../components/Icon';
+import TelechargerChapitre from '../../components/TelechargerChapitre';
+import InviterRevision from '../../components/InviterRevision';
 
 export default function ChapitrePage() {
   const { id } = useParams();
@@ -182,6 +184,15 @@ export default function ChapitrePage() {
           <h1 className="brand-font" style={{ fontSize: 'clamp(1.8rem, 4vw, 2.6rem)', lineHeight: 1.05, margin: '0 0 22px', fontWeight: 800 }}>
             {chapitre.nom}
           </h1>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            {(chapitre.ressources || []).some((r) => (r.type === 'exercice' || r.type === 'annale') && r.url_fichier) && (
+              <Link href={`/atelier?chapitre=${chapitre.id}`} className="btn-dark" style={{ margin: '-8px 0 18px' }}>
+                <Icon name="timer" size={16} /> S'entraîner sur ce chapitre
+              </Link>
+            )}
+            <InviterRevision nom={chapitre.nom} />
+          </div>
+          <TelechargerChapitre chapitreId={chapitre.id} />
 
           {prog.connecte && nbLisibles > 0 && (
             <div className="prog-line">
