@@ -2,7 +2,7 @@
 // À COMPLÉTER avec tes vraies informations avant le lancement.
 export const SITE = {
   nom: 'RéussirBac SN',
-  email: 'landingniang64@gmail.com',   // adresse où les élèves et parents peuvent t'écrire
+  email: 'contact@exemple.sn',   // adresse où les élèves et parents peuvent t'écrire
   whatsapp: '',                  // numéro WhatsApp au format international sans + ni espaces, ex. 221771234567 (laisse vide pour ne pas l'afficher)
   instagram: '',                 // lien de ton compte, ex. https://www.instagram.com/ton_compte (vide = icône masquée)
   tiktok: '',                    // lien de ton compte, ex. https://www.tiktok.com/@ton_compte (vide = icône masquée)

@@ -8,6 +8,7 @@ import MenuBurger from './components/MenuBurger';
 import SiteFooter from './components/SiteFooter';
 import Parcours from './components/Parcours';
 import Pourquoi from './components/Pourquoi';
+import Fonctions from './components/Fonctions';
 import Rythme from './components/Rythme';
 
 const DEMO = {
@@ -41,6 +42,7 @@ export default function Accueil() {
         <Link className="lp-logo" href="/">Réussir<b>Bac</b> SN</Link>
         <nav className="lp-nav-links" aria-label="Navigation principale">
           <a className="hide-s" href="#niveaux">Classes</a>
+          <a className="hide-s" href="#fonctions">Fonctions</a>
           <Link className="hide-s" href="/bibliotheque">Bibliothèque</Link>
           <Link className="hide-s" href="/tarifs">Tarifs</Link>
           <Link className="hide-s" href="/moyenne">Ma moyenne</Link>
@@ -48,7 +50,7 @@ export default function Accueil() {
             <Link className="lp-btn lp-btn-main" href="/profil">Mon profil</Link>
           ) : (
             <>
-              <Link href="/login">Connexion</Link>
+              <Link className="hide-xs" href="/login">Connexion</Link>
               <Link className="lp-btn lp-btn-main" href="/inscription"><span className="long">Créer un compte</span><span className="short">S'inscrire</span></Link>
             </>
           )}
@@ -129,6 +131,8 @@ export default function Accueil() {
           </div>
         </section>
 
+        <Fonctions />
+
         <Pourquoi />
 
         <Rythme />
@@ -141,7 +145,7 @@ export default function Accueil() {
             </div>
             <ul className="lp-facts">
               <li><strong>La vidéo démarre sur ton appui</strong><span>Tu vois l'aperçu tout de suite. Les données ne sont utilisées que si tu lances la lecture.</span></li>
-              <li><strong>Le PDF se lit dans la page</strong><span>Tu le lis sans quitter le cours, ou tu le télécharges.</span></li>
+              <li><strong>Le PDF se lit dans la page</strong><span>Tu le lis sans quitter le cours, et tu peux le garder pour réviser sans connexion.</span></li>
               <li><strong>Un chapitre, tout au même endroit</strong><span>Cours, exercices et annales d'un même chapitre, à un onglet d'écart.</span></li>
             </ul>
           </div>

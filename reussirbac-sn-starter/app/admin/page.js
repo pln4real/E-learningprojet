@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
-import { TYPES, aPdf, aVideo, safeFileName, storagePathFromUrl } from '../../lib/media';
+import { TYPES, aPdf, aVideo, youtubeId, lienYoutube, safeFileName, storagePathFromUrl } from '../../lib/media';
 import Topbar from '../components/Topbar';
 import Icon from '../components/Icon';
 import QuizAdmin from './QuizAdmin';
@@ -12,6 +12,7 @@ import AbonnementsAdmin from './AbonnementsAdmin';
 import BibliothequeAdmin from './BibliothequeAdmin';
 import ImportLot from './ImportLot';
 import SignalementsAdmin from './SignalementsAdmin';
+import DecoupeAdmin from './DecoupeAdmin';
 import SommaireEditor from './SommaireEditor';
 import { cleChapitre } from '../../lib/texte';
 import ChapitreHint from './ChapitreHint';
@@ -161,6 +162,13 @@ export default function AdminPage() {
           </button>
           <button
             type="button"
+            className={tab === 'decoupe' ? 'active' : ''}
+            onClick={() => { setEditing(null); setTab('decoupe'); }}
+          >
+            Découpage
+          </button>
+          <button
+            type="button"
             className={tab === 'signalements' ? 'active' : ''}
             onClick={() => { setEditing(null); setTab('signalements'); }}
           >
@@ -194,6 +202,8 @@ export default function AdminPage() {
 
         {tab === 'signalements' && <SignalementsAdmin />}
 
+        {tab === 'decoupe' && <DecoupeAdmin />}
+
         {tab === 'import' && <ImportLot niveaux={niveaux} onTermine={() => setTab('liste')} />}
       </main>
     </>
@@ -226,7 +236,7 @@ function ChapitreContenus({ existants }) {
     exercice: existants.filter((r) => r.type === 'exercice').length,
     annale: existants.filter((r) => r.type === 'annale').length,
   };
-  const cases = [['cours', 'Cours'], ['video', 'Vidéo'], ['revision', 'Révision'], ['fiche', 'Fiche visuelle'], ['exercice', 'Exercices'], ['annale', 'Annales']];
+  const cases = [['cours', 'Cours'], ['video', 'Vidéo'], ['revision', 'Résumé'], ['fiche', 'Fiche visuelle'], ['exercice', 'Exercices'], ['annale', 'Annales']];
   return (
     <div className="adm-deja">
       <div className="adm-deja-titre">Déjà dans ce chapitre</div>
@@ -329,8 +339,8 @@ function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel 
       fail('Ajoute au moins un support : un fichier PDF, un lien YouTube, ou les deux.');
       return;
     }
-    if (videoUrl.trim() && !/youtu\.?be/i.test(videoUrl)) {
-      fail("Le lien vidéo doit être un lien YouTube (youtube.com ou youtu.be).");
+    if (videoUrl.trim() && !lienYoutube(videoUrl)) {
+      fail("Ce lien n'est pas reconnu comme une vidéo YouTube. Colle le lien d'UNE vidéo (pas une chaîne ni une liste de lecture), par exemple https://youtu.be/xxxxxxxxxxx.");
       return;
     }
 
@@ -388,7 +398,7 @@ function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel 
       description: description.trim(),
       source: urlFichier ? 'pdf' : 'video',
       url_fichier: urlFichier,
-      url_video: videoUrl.trim() || null,
+      url_video: lienYoutube(videoUrl) || null,
       statut: publie ? 'publie' : 'brouillon',
       acces,
     };
@@ -418,7 +428,7 @@ function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel 
       if (/duree_min|bareme|difficulte|calculatrice|url_corrige|ressources_(duree|bareme)_check/.test(error.message)) {
         fail("La fiche d'entraînement (durée, barème, difficulté, corrigé) n'est pas encore activée dans la base. Lance d'abord le script SQL 21 dans Supabase (SQL Editor), puis réessaie.");
       } else if (/ressources_type_check/.test(error.message)) {
-        fail("Ce type de contenu (Révision ou Fiche visuelle) n'est pas encore activé dans la base. Lance d'abord le script SQL 12 dans Supabase (SQL Editor), puis réessaie.");
+        fail("Ce type de contenu (Résumé ou Fiche visuelle) n'est pas encore activé dans la base. Lance d'abord le script SQL 12 dans Supabase (SQL Editor), puis réessaie.");
       } else fail('Erreur : ' + error.message);
       return;
     }
@@ -460,7 +470,7 @@ function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel 
       {isEdit && (
         <div className="adm-alerte">
           <b>Ici, tu corriges ce contenu précis.</b> Tu ne peux pas en faire un autre type, et un nouveau PDF remplace l'ancien.
-          Pour ajouter un autre type dans ce chapitre (exercices, révision, annales…) :
+          Pour ajouter un autre type dans ce chapitre (exercices, résumé, annales…) :
           <button type="button" className="btn-dark" style={{ marginTop: 10 }} onClick={() => onAddOther && onAddOther(initial)}>
             <Icon name="plus" size={15} /> Ajouter un autre contenu dans ce chapitre
           </button>
@@ -511,7 +521,7 @@ function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel 
           )}
           {isEdit && (
             <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '8px 0 0' }}>
-              Le type d'un contenu existant ne peut pas être changé. Pour une fiche visuelle ou une révision, utilise l'onglet « Ajouter ».
+              Le type d'un contenu existant ne peut pas être changé. Pour une fiche visuelle ou un résumé, utilise l'onglet « Ajouter ».
             </p>
           )}
         </div>
@@ -604,7 +614,12 @@ function ResourceForm({ niveaux, initial, preset, onAddOther, onSaved, onCancel 
 
         <div className="field">
           <label><Icon name="play" size={14} /> Vidéo YouTube (facultatif)</label>
-          <input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=..." />
+          <input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=..." inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+          {videoUrl.trim() && (youtubeId(videoUrl)
+            ? <p className="success-text" style={{ margin: '8px 0 0', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <img src={`https://i.ytimg.com/vi/${youtubeId(videoUrl)}/default.jpg`} alt="" width="64" height="48" style={{ borderRadius: 6 }} /> Vidéo reconnue.
+              </p>
+            : <p className="error-text" style={{ margin: '8px 0 0' }}>Lien non reconnu. Colle le lien d'une vidéo YouTube (le lien d'une chaîne ou d'une liste de lecture ne marche pas).</p>)}
           <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '8px 0 0' }}>
             Tu peux ajouter le PDF, la vidéo, ou les deux pour le même contenu. Vider le champ retire la vidéo.
           </p>
@@ -774,6 +789,7 @@ function ResourceList({ niveaux, onEdit, onAddOther }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filtreNiveau, setFiltreNiveau] = useState('');
+  const [filtreMatiere, setFiltreMatiere] = useState('');
   const [filtreStatut, setFiltreStatut] = useState('');
   const [filtreType, setFiltreType] = useState('');
   const [recherche, setRecherche] = useState('');
@@ -826,10 +842,15 @@ function ResourceList({ niveaux, onEdit, onAddOther }) {
     setBusyId(null);
   }
 
+  const nomsMatieres = [...new Set(items
+    .filter((r) => !filtreNiveau || r.chapitres?.matieres?.niveaux?.id === filtreNiveau)
+    .map((r) => r.chapitres?.matieres?.nom).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
+  const matiereActive = nomsMatieres.includes(filtreMatiere) ? filtreMatiere : '';
   const q = recherche.trim().toLowerCase();
   const horsType = items.filter((r) => {
     const niv = r.chapitres?.matieres?.niveaux?.id;
     if (filtreNiveau && niv !== filtreNiveau) return false;
+    if (matiereActive && r.chapitres?.matieres?.nom !== matiereActive) return false;
     if (filtreStatut && r.statut !== filtreStatut) return false;
     if (q && !`${r.titre} ${r.chapitres?.nom || ''}`.toLowerCase().includes(q)) return false;
     return true;
@@ -888,6 +909,10 @@ function ResourceList({ niveaux, onEdit, onAddOther }) {
         <select value={filtreNiveau} onChange={(e) => setFiltreNiveau(e.target.value)} aria-label="Filtrer par niveau">
           <option value="">Tous les niveaux</option>
           {niveaux.map((n) => <option key={n.id} value={n.id}>{n.nom}</option>)}
+        </select>
+        <select value={matiereActive} onChange={(e) => setFiltreMatiere(e.target.value)} aria-label="Filtrer par matière">
+          <option value="">Toutes les matières</option>
+          {nomsMatieres.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
         <select value={filtreStatut} onChange={(e) => setFiltreStatut(e.target.value)} aria-label="Filtrer par statut">
           <option value="">Tous les statuts</option>

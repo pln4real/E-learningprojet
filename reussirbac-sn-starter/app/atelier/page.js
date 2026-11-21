@@ -46,15 +46,29 @@ function Contenu() {
       setNiveaux(data || []);
       setEtat('pret');
       // Suivi : favoris et « à revoir »
-      const sel = 'ressource_id, ressources(id, titre, type, chapitres(nom, matieres(nom)))';
-      const [fav, ev] = await Promise.all([
-        supabase.from('atelier_favoris').select(sel).order('cree_le', { ascending: false }).limit(20),
-        supabase.from('atelier_evaluations').select(sel + ', etat').in('etat', ['a_revoir', 'rate']).order('maj', { ascending: false }).limit(20),
-      ]);
+      const base = 'ressource_id, ressources(id, titre, type, chapitres(nom, matieres(nom)))';
+      const avecEx = 'exercice_id, ' + base + ', exercices(id, numero, titre, ressources(titre, chapitres(nom, matieres(nom))))';
+      const lire = async (table, tri, filtre) => {
+        for (const sel of [avecEx, base]) {
+          let q = supabase.from(table).select(filtre ? sel + ', etat' : sel).order(tri, { ascending: false }).limit(20);
+          if (filtre) q = q.in('etat', filtre);
+          const r = await q;
+          if (!r.error) return r.data || [];
+        }
+        return [];
+      };
+      const [fav, ev] = await Promise.all([lire('atelier_favoris', 'cree_le'), lire('atelier_evaluations', 'maj', ['a_revoir', 'rate'])]);
       if (!actif) return;
+      const unifier = (x) => {
+        if (x.exercices) {
+          const e = x.exercices;
+          return { id: 'x' + e.id, titre: e.titre || `${e.ressources?.titre || 'Exercice'} - exercice ${e.numero}`, chapitres: e.ressources?.chapitres, etat: x.etat };
+        }
+        return x.ressources ? { ...x.ressources, etat: x.etat } : null;
+      };
       setSuivi({
-        favoris: (fav.data || []).map((x) => x.ressources).filter(Boolean),
-        arevoir: (ev.data || []).map((x) => ({ ...x.ressources, etat: x.etat })).filter((x) => x && x.id),
+        favoris: fav.map(unifier).filter(Boolean),
+        arevoir: ev.map(unifier).filter((x) => x && x.id),
       });
     })();
     return () => { actif = false; };
@@ -103,9 +117,12 @@ function Contenu() {
       setChapitres(chs);
       if (!chs.length) return;
       const { data: rs } = await supabase.from('ressources').select('id, chapitre_id, type').in('chapitre_id', chs.map((c) => c.id)).in('type', ['exercice', 'annale']).not('url_fichier', 'is', null);
+      const { data: exs } = (rs && rs.length) ? await supabase.from('exercices').select('id, ressource_id').in('ressource_id', rs.map((r) => r.id)) : { data: [] };
       if (!actif) return;
+      const nbEx = {};
+      (exs || []).forEach((e) => { nbEx[e.ressource_id] = (nbEx[e.ressource_id] || 0) + 1; });
       const c = {};
-      (rs || []).forEach((r) => { c[r.chapitre_id] = c[r.chapitre_id] || { exercice: 0, annale: 0 }; c[r.chapitre_id][r.type]++; });
+      (rs || []).forEach((r) => { c[r.chapitre_id] = c[r.chapitre_id] || { exercice: 0, annale: 0 }; c[r.chapitre_id][r.type] += nbEx[r.id] || 1; });
       setComptes(c);
     })();
     return () => { actif = false; };
@@ -136,18 +153,29 @@ function Contenu() {
     if (!matiereId) { setErreur('Choisis d\'abord une classe et une matière.'); return; }
     if (!chapitresActifs.length) { setErreur('Choisis au moins un chapitre, ou touche « Tout le programme ».'); return; }
     setOccupe(true);
-    const { data, error } = await supabase.from('ressources')
+    const { data: ressources, error } = await supabase.from('ressources')
       .select('id, chapitre_id, type, duree_min, bareme')
       .in('chapitre_id', chapitresActifs.map((c) => c.id)).in('type', types).not('url_fichier', 'is', null);
     if (error) { setErreur('Impossible de lire les sujets pour le moment. Réessaie dans un instant.'); setOccupe(false); return; }
-    if (!data || !data.length) {
+    const { data: exs } = (ressources && ressources.length)
+      ? await supabase.from('exercices').select('id, ressource_id').in('ressource_id', ressources.map((r) => r.id))
+      : { data: [] };
+    // Un PDF découpé est tiré exercice par exercice (identifiant préfixé par « x »), sinon en entier
+    const parRes = {};
+    (exs || []).forEach((e) => { (parRes[e.ressource_id] = parRes[e.ressource_id] || []).push(e); });
+    const data = [];
+    (ressources || []).forEach((r) => {
+      if (parRes[r.id]) parRes[r.id].forEach((e) => data.push({ id: 'x' + e.id, chapitre_id: r.chapitre_id, type: r.type }));
+      else data.push(r);
+    });
+    if (!data.length) {
       setErreur(verrouilles > 0
         ? 'Les sujets de cette sélection sont réservés aux abonnés.'
         : 'Il n\'y a pas encore de sujet dans cette sélection. Essaie d\'autres chapitres.');
       setOccupe(false); return;
     }
-    const { data: ev } = await supabase.from('atelier_evaluations').select('ressource_id').eq('etat', 'reussi');
-    const deja = new Set((ev || []).map((x) => x.ressource_id));
+    const { data: ev } = await supabase.from('atelier_evaluations').select('ressource_id, exercice_id').eq('etat', 'reussi');
+    const deja = new Set((ev || []).map((x) => (x.exercice_id ? 'x' + x.exercice_id : x.ressource_id)));
     const tirage = tirerSujet(data, Math.min(nb, data.length), deja);
     ecrire({ niveauId, matiereId, chapitres: [...choisis], types, nb });
     router.push(`/atelier/sujet?r=${tirage.map((r) => r.id).join(',')}`);
@@ -207,7 +235,7 @@ function Contenu() {
           </div>
           {chapitres.length === 0 && <p className="at-muted">Aucun chapitre pour cette matière.</p>}
           <div className="at-chapitres">
-            {chapitres.map((c) => {
+            {[...chapitres].sort((a, b) => (nbDispo(b) > 0) - (nbDispo(a) > 0)).map((c) => {
               const n = nbDispo(c);
               const coche = choisis.has(c.id);
               return (

@@ -194,7 +194,7 @@ export default function HorsLigneApp() {
                       </div>
                       {doc.res.image && !doc.corrige
                         ? <img src={doc.url} alt={doc.res.titre} style={{ width: '100%', display: 'block' }} />
-                        : <PdfPages key={doc.url} url={doc.url} titre={doc.res.titre} secours={doc.url} />}
+                        : <PdfPages key={doc.url} url={doc.url} titre={doc.res.titre} />}
                     </section>
                   )}
                 </>

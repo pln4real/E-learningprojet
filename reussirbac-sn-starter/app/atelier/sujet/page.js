@@ -5,12 +5,13 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
 import { signerRessources, cheminStockage } from '../../../lib/media';
-import { assemblerPdf, dureeDe, baremeDe, formatDuree, formatChrono, DIFFICULTES } from '../../../lib/atelier';
+import { assemblerPdf } from '../../../lib/decoupe';
+import { dureeDe, baremeDe, formatDuree, formatChrono, DIFFICULTES } from '../../../lib/atelier';
 import AtelierShell from '../../components/AtelierShell';
 import PdfPages from '../../components/PdfPages';
 import Icon from '../../components/Icon';
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID = /^x?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BAREME_DEFAUT = 4;
 
 const ETATS = [
@@ -71,26 +72,47 @@ function Contenu() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!actif) return;
       if (!user) { setEtat('deconnecte'); return; }
-      const { data, error } = await supabase.from('ressources')
-        .select('id, chapitre_id, type, titre, url_fichier, url_corrige, duree_min, bareme, difficulte, calculatrice, chapitres(nom, matieres(nom, niveaux(nom)))')
-        .in('id', ids).eq('statut', 'publie');
+      const plain = ids.filter((x) => x[0] !== 'x');
+      const xids = ids.filter((x) => x[0] === 'x').map((x) => x.slice(1));
+      const champs = 'id, chapitre_id, type, titre, url_fichier, url_corrige, duree_min, bareme, difficulte, calculatrice, chapitres(nom, matieres(nom, niveaux(nom)))';
+      const [rp, rx] = await Promise.all([
+        plain.length ? supabase.from('ressources').select(champs).in('id', plain).eq('statut', 'publie') : { data: [] },
+        xids.length ? supabase.from('exercices').select('id, numero, titre, segments, segments_corrige, duree_min, bareme, difficulte, ressources(' + champs + ')').in('id', xids) : { data: [] },
+      ]);
       if (!actif) return;
-      if (error || !data || !data.length) { setEtat('vide'); return; }
+      const data = [...(rp.data || [])];
+      (rx.data || []).forEach((e) => {
+        const r = e.ressources;
+        if (!r || !r.url_fichier) return;
+        data.push({
+          ...r, id: 'x' + e.id, exercice: true, ressource_id: r.id,
+          titre: e.titre || `${r.titre} - exercice ${e.numero}`,
+          segments: e.segments, segments_corrige: e.segments_corrige,
+          duree_min: e.duree_min, bareme: e.bareme, difficulte: e.difficulte,
+        });
+      });
+      const error = rp.error || rx.error;
+      if (error || !data.length) { setEtat('vide'); return; }
       const ordre = new Map(ids.map((x, i) => [x, i]));
       const tries = data.filter((r) => r.url_fichier).sort((a, b) => ordre.get(a.id) - ordre.get(b.id));
       if (!tries.length) { setEtat('vide'); return; }
       const signes = await signerRessources(supabase, tries);
       if (!actif) return;
       setItems(signes); setManquants(ids.length - signes.length);
-      const [ev, fav] = await Promise.all([
-        supabase.from('atelier_evaluations').select('ressource_id, etat, note').in('ressource_id', ids),
-        supabase.from('atelier_favoris').select('ressource_id').in('ressource_id', ids),
+      const xs = ids.filter((x) => x[0] === 'x').map((x) => x.slice(1));
+      const ps = ids.filter((x) => x[0] !== 'x');
+      const [ev, fav, evx, favx] = await Promise.all([
+        ps.length ? supabase.from('atelier_evaluations').select('ressource_id, etat, note').in('ressource_id', ps) : { data: [] },
+        ps.length ? supabase.from('atelier_favoris').select('ressource_id').in('ressource_id', ps) : { data: [] },
+        xs.length ? supabase.from('atelier_evaluations').select('exercice_id, etat, note').in('exercice_id', xs) : { data: [] },
+        xs.length ? supabase.from('atelier_favoris').select('exercice_id').in('exercice_id', xs) : { data: [] },
       ]);
       if (!actif) return;
       const e = {};
       (ev.data || []).forEach((x) => { e[x.ressource_id] = { etat: x.etat, note: x.note }; });
+      (evx.data || []).forEach((x) => { e['x' + x.exercice_id] = { etat: x.etat, note: x.note }; });
       setEvals(e);
-      setFavoris(new Set((fav.data || []).map((x) => x.ressource_id)));
+      setFavoris(new Set([...(fav.data || []).map((x) => x.ressource_id), ...(favx.data || []).map((x) => 'x' + x.exercice_id)]));
       const s = lireSession(cle);
       if (s && s.phase) { setPhase(s.phase); setMode(s.mode || 'chrono'); setDebut(s.debut || null); setDuree(s.duree || null); }
       setEtat('pret');
@@ -104,7 +126,9 @@ function Contenu() {
     try {
       const mat = liste[0]?.chapitres?.matieres;
       const { octets } = await assemblerPdf(
-        liste.map((r) => ({ titre: r.titre, chapitre: r.chapitres?.nom, url: r.url_fichier_vue || r.url_fichier })),
+        liste.map((r) => (r.exercice
+          ? { titre: r.titre, chapitre: r.chapitres?.nom, segments: r.segments, urls: { s: r.url_fichier_vue || r.url_fichier, c: r.url_corrige_vue || r.url_fichier_vue || r.url_fichier } }
+          : { titre: r.titre, chapitre: r.chapitres?.nom, url: r.url_fichier_vue || r.url_fichier })),
         { titre: liste.length > 1 ? `Sujet d'entrainement - ${liste.length} exercices` : "Sujet d'entrainement", sousTitre: [mat?.nom, mat?.niveaux?.nom].filter(Boolean).join(' - ') },
       );
       const url = URL.createObjectURL(new Blob([octets], { type: 'application/pdf' }));
@@ -161,10 +185,11 @@ function Contenu() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const r = items.find((x) => x.id === id);
+      const ex = id[0] === 'x';
       await supabase.from('atelier_evaluations').upsert({
-        user_id: user.id, ressource_id: id, etat: nouveau.etat || null,
+        user_id: user.id, ...(ex ? { exercice_id: id.slice(1) } : { ressource_id: id }), etat: nouveau.etat || null,
         note: nouveau.note == null ? null : nouveau.note, bareme: r ? (baremeDe(r) || BAREME_DEFAUT) : null, maj: new Date().toISOString(),
-      });
+      }, { onConflict: ex ? 'user_id,exercice_id' : 'user_id,ressource_id' });
     }, patch.note !== undefined ? 500 : 0);
   }
   async function basculerFavori(id) {
@@ -172,8 +197,11 @@ function Contenu() {
     if (!user) return;
     const on = favoris.has(id);
     setFavoris((p) => { const n = new Set(p); if (on) n.delete(id); else n.add(id); return n; });
-    if (on) await supabase.from('atelier_favoris').delete().eq('ressource_id', id).eq('user_id', user.id);
-    else await supabase.from('atelier_favoris').upsert({ user_id: user.id, ressource_id: id });
+    const ex = id[0] === 'x';
+    const col = ex ? 'exercice_id' : 'ressource_id';
+    const val = ex ? id.slice(1) : id;
+    if (on) await supabase.from('atelier_favoris').delete().eq(col, val).eq('user_id', user.id);
+    else await supabase.from('atelier_favoris').upsert({ user_id: user.id, [col]: val }, { onConflict: 'user_id,' + col });
   }
 
   // Corrigé : lien temporaire demandé seulement quand l'élève le réclame
@@ -181,6 +209,21 @@ function Contenu() {
     if (ouvert === r.id) { setOuvert(null); return; }
     setOuvert(r.id);
     if (corrige[r.id]) return;
+    if (r.exercice) {
+      // Corrigé d'un exercice : on recopie sa zone de correction dans un petit PDF
+      if (!r.segments_corrige) { setCorrige((p) => ({ ...p, [r.id]: 'absent' })); return; }
+      try {
+        const cc = cheminStockage(r.url_corrige);
+        let urlC = r.url_fichier_vue || r.url_fichier;
+        if (cc) { const { data: sg } = await supabase.storage.from('ressources').createSignedUrl(cc, 3600); if (sg?.signedUrl) urlC = sg.signedUrl; }
+        const { octets } = await assemblerPdf(
+          [{ titre: r.titre, chapitre: r.chapitres?.nom, segments: r.segments_corrige, urls: { s: r.url_fichier_vue || r.url_fichier, c: urlC } }],
+          { couverture: false, etiquette: 'Corrigé' },
+        );
+        setCorrige((p) => ({ ...p, [r.id]: { url: URL.createObjectURL(new Blob([octets], { type: 'application/pdf' })) } }));
+      } catch (e) { setCorrige((p) => ({ ...p, [r.id]: 'erreur' })); }
+      return;
+    }
     const chemin = cheminStockage(r.url_corrige);
     if (!chemin) { setCorrige((p) => ({ ...p, [r.id]: 'absent' })); return; }
     const { data, error } = await supabase.storage.from('ressources').createSignedUrl(chemin, 3600);
@@ -270,7 +313,7 @@ function Contenu() {
         <article className="at-carte at-sujet" key={r.id}>
           <div className="at-sujet-tete">
             <div>
-              <small className="at-kicker">{r.type === 'annale' ? 'Annale' : 'Exercice'} · {r.chapitres?.matieres?.nom}</small>
+              <small className="at-kicker">{r.exercice ? (r.type === 'annale' ? 'Extrait d\'annale' : 'Exercice') : (r.type === 'annale' ? 'Annale' : 'Exercice')} · {r.chapitres?.matieres?.nom}</small>
               <h3 className="at-titre3">{i + 1}. {r.titre}</h3>
               <p className="at-muted at-petit">{r.chapitres?.nom}</p>
             </div>
@@ -290,7 +333,7 @@ function Contenu() {
                   {!corrige[r.id] && <p className="at-muted">Chargement du corrigé...</p>}
                   {corrige[r.id] === 'absent' && <p className="at-muted">Le corrigé de ce sujet n'est pas encore disponible.</p>}
                   {corrige[r.id] === 'erreur' && <p className="at-erreur">Le corrigé n'a pas pu être ouvert. Réessaie dans un instant.</p>}
-                  {corrige[r.id] && corrige[r.id].url && <div className="at-pdf"><PdfPages url={corrige[r.id].url} titre={'Corrigé : ' + r.titre} secours={corrige[r.id].url} /></div>}
+                  {corrige[r.id] && corrige[r.id].url && <div className="at-pdf"><PdfPages url={corrige[r.id].url} titre={'Corrigé : ' + r.titre} /></div>}
                 </div>
               )}
 
@@ -315,9 +358,8 @@ function Contenu() {
         <>
           {assemblage && <p className="at-muted" role="status">{assemblage}</p>}
           {erreur && <p className="at-erreur" role="alert">{erreur} <button type="button" className="at-lien" onClick={() => assembler(items)}>Réessayer</button></p>}
-          {pdfUrl && <div className="at-pdf"><PdfPages url={pdfUrl} titre="Sujet d'entraînement" secours={pdfUrl} /></div>}
+          {pdfUrl && <div className="at-pdf"><PdfPages url={pdfUrl} titre="Sujet d'entraînement" /></div>}
           <div className="at-actions at-col">
-            {pdfUrl && <a className="at-btn" href={pdfUrl} download="sujet-entrainement.pdf"><Icon name="download" size={16} /> Télécharger le sujet (PDF)</a>}
             <button type="button" className="at-btn at-btn-hib at-gros" onClick={terminer}><Icon name="checkCircle" size={18} /> J'ai terminé, voir le corrigé</button>
           </div>
         </>
@@ -334,7 +376,7 @@ function Contenu() {
             <button type="button" className="at-btn" onClick={() => { setRevoirSujet((v) => !v); if (!pdfUrl) assembler(items); }}>
               <Icon name="file" size={16} /> {revoirSujet ? 'Masquer le sujet' : 'Revoir le sujet'}
             </button>
-            {revoirSujet && pdfUrl && <div className="at-pdf"><PdfPages url={pdfUrl} titre="Sujet d'entraînement" secours={pdfUrl} /></div>}
+            {revoirSujet && pdfUrl && <div className="at-pdf"><PdfPages url={pdfUrl} titre="Sujet d'entraînement" /></div>}
             <button type="button" className="at-btn" onClick={partager}><Icon name="share" size={16} /> Partager ce sujet</button>
             <button type="button" className="at-btn" onClick={copierLien}><Icon name="copy" size={16} /> {copie ? 'Lien copié' : 'Copier le lien'}</button>
             <button type="button" className="at-btn" onClick={recommencer}><Icon name="refresh" size={16} /> Refaire ce sujet</button>

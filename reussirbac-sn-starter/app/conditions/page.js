@@ -14,7 +14,7 @@ export default function Conditions() {
       <p>Si tu as moins de 18 ans, tu dois avoir l'accord d'un parent ou d'un responsable légal pour créer un compte et, plus tard, pour souscrire un abonnement.</p>
 
       <h2>3. Contenus et accès</h2>
-      <p>Une partie des contenus est gratuite. D'autres sont réservés aux abonnés, et certaines fonctions, comme le téléchargement des fichiers, peuvent dépendre de la formule choisie. Les formules et les prix sont indiqués sur le site au moment de la souscription.</p>
+      <p>Une partie des contenus est gratuite. D'autres sont réservés aux abonnés, et certaines fonctions peuvent dépendre de la formule choisie. Les formules et les prix sont indiqués sur le site au moment de la souscription.</p>
       <p>Les cours, exercices, vidéos et documents du site sont protégés. Tu peux les utiliser pour tes révisions personnelles. Tu ne peux pas les revendre, les republier ou les partager à grande échelle sans autorisation écrite.</p>
 
       <h2>4. Paiement</h2>

@@ -54,7 +54,7 @@ export default function MonAbonnement({ userId, palier }) {
         <p key={a.id} className="mab-msg">À venir : <b>{a.plan_nom}</b> ({libellePortee(a.niveaux_ids, niveaux)}), du {dateFr(a.debut)} au {dateFr(a.fin)}.</p>
       ))}
       {etat.actifs.length === 0 && manuel && (
-        <p className="mab-msg">Accès complet activé par l'équipe. {palier === 'premium' ? 'Téléchargement des PDF inclus.' : ''}</p>
+        <p className="mab-msg">Accès complet activé par l'équipe.</p>
       )}
       {etat.actifs.length === 0 && !manuel && (
         <p className="mab-msg">

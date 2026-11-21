@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
 import PdfPages from '../../components/PdfPages';
-import { TABS, aPdf, aVideo, downloadUrl, youtubeId, signerRessources, estImageUrl } from '../../../lib/media';
+import { TABS, aPdf, aVideo, youtubeId, signerRessources, estImageUrl } from '../../../lib/media';
 import { usePalier } from '../../../lib/usePalier';
 import { useProgression } from '../../../lib/useProgression';
 import QuizPlayer from '../../components/QuizPlayer';
@@ -131,7 +131,6 @@ export default function ChapitrePage() {
   // Passerelles entre les onglets quand le même contenu a les deux supports
   const autreVideo = !verrou && activeTab === 'cours' && selected && aVideo(selected) && aUneVideo;
   const autrePdf = !verrou && activeTab === 'video' && selected && aPdf(selected) && aUnPdf;
-  const peutTelecharger = palier === 'premium';
   const ongletCourant = tousOnglets.find((t) => t.key === activeTab);
 
   // Liste cliquable du sommaire (colonne fixe sur grand écran, panneau sur téléphone)
@@ -165,13 +164,6 @@ export default function ChapitrePage() {
           { label: matiere?.nom || 'Matière', href: matiere ? `/matiere/${matiere.id}` : '/' },
           { label: chapitre.nom },
         ]}
-        action={
-          estPdf && peutTelecharger ? (
-            <a className="btn-dark" href={selected.url_fichier_tel || downloadUrl(selected.url_fichier, selected.titre)}>
-              <Icon name="download" size={16} /> Télécharger en PDF
-            </a>
-          ) : null
-        }
       />
 
       <div className="with-side">
@@ -365,7 +357,6 @@ export default function ChapitrePage() {
                     <PdfPages
                       key={selected.id}
                       url={lienVue}
-                      secours={lienVue}
                       titre={selected.titre}
                       cible={pdfCible.id === selected.id ? pdfCible : null}
                       onPage={setPdfPage}
@@ -418,20 +409,6 @@ export default function ChapitrePage() {
                       <Icon name="bookOpen" size={16} /> Lire le PDF ici
                     </button>
                   )}
-                  {estPdf && (
-                    <a className="btn-light" href={lienVue} target="_blank" rel="noreferrer">
-                      <Icon name="external" size={15} /> Ouvrir dans un nouvel onglet
-                    </a>
-                  )}
-                  {estPdf && (peutTelecharger ? (
-                    <a className="btn-light" href={selected.url_fichier_tel || downloadUrl(selected.url_fichier, selected.titre)}>
-                      <Icon name="download" size={15} /> Télécharger
-                    </a>
-                  ) : (
-                    <span className="btn-light btn-locked" title="Le téléchargement est réservé à l'abonnement Premium">
-                      <Icon name="lock" size={15} /> Télécharger (Premium)
-                    </span>
-                  ))}
                   {montreVideo && aUneVideo && (
                     <a className="btn-light" href={selected.url_video} target="_blank" rel="noreferrer">
                       <Icon name="external" size={15} /> Ouvrir sur YouTube

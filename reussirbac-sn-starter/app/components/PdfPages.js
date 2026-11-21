@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { chargerPdfjs } from '../../lib/pdfjs';
+import { supabase } from '../../lib/supabaseClient';
 
 // Lecteur PDF qui montre TOUTES les pages l'une sous l'autre (comme une page web) :
 // les téléphones n'affichent que la 1re page d'un PDF dans un cadre, ce lecteur règle ça.
 // - cible = { page, n } : fait défiler jusqu'à cette page (n change à chaque clic sur le sommaire)
 // - onPage(n) : page actuellement lue (pour surligner le sommaire)
-// - secours : adresse du PDF à afficher dans un cadre si la lecture directe échoue
+// Le contenu ne se lit que dans la page : pas de cadre PDF du navigateur (qui propose « enregistrer »),
+// pas de clic droit, et un filigrane discret avec l'adresse de l'élève gravé dans l'image de chaque page.
 export default function PdfPages({ url, titre, cible, onPage, onPret, secours }) {
   const [etat, setEtat] = useState('chargement'); // chargement | pret | erreur
   const [ratios, setRatios] = useState([]);
@@ -18,6 +20,14 @@ export default function PdfPages({ url, titre, cible, onPage, onPret, secours })
   const enCours = useRef(new Set());
   const zoneRef = useRef(null);
   const dernierePage = useRef(0);
+  const marque = useRef('');
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      const u = data && data.session && data.session.user;
+      marque.current = u && u.email ? `${u.email}  ·  ${new Date().toLocaleDateString('fr-FR')}` : '';
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     let actif = true;
@@ -68,6 +78,17 @@ export default function PdfPages({ url, titre, cible, onPage, onPret, secours })
       const ctx = canvas.getContext('2d');
       ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
       await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      if (marque.current) {
+        ctx.save();
+        ctx.globalAlpha = 0.06; ctx.fillStyle = '#12142F';
+        ctx.font = `700 ${Math.round(canvas.width / 26)}px sans-serif`;
+        ctx.translate(canvas.width / 2, canvas.height / 2); ctx.rotate(-Math.PI / 7);
+        const pas = canvas.width / 4;
+        for (let y = -canvas.height; y < canvas.height; y += pas) {
+          for (let x = -canvas.width * 1.2; x < canvas.width * 1.2; x += canvas.width * 0.95) ctx.fillText(marque.current, x + (Math.round(y / pas) % 2 ? canvas.width * 0.45 : 0), y);
+        }
+        ctx.restore();
+      }
       rendues.current.add(n);
       hote.dataset.ok = '1';
     } catch (e) { /* page ignorée */ }
@@ -130,9 +151,7 @@ export default function PdfPages({ url, titre, cible, onPage, onPret, secours })
   }, [etat, cible && cible.n]);
 
   if (etat === 'erreur') {
-    return secours
-      ? <iframe className="pdf-frame" src={secours} title={titre} />
-      : <p className="viewer-note">Ce PDF n'a pas pu être affiché. Utilise « Ouvrir dans un nouvel onglet ».</p>;
+    return <p className="viewer-note" role="alert">Ce document n'a pas pu s'afficher. Vérifie ta connexion et réessaie dans un instant.</p>;
   }
   if (etat === 'chargement') {
     return (
@@ -143,7 +162,7 @@ export default function PdfPages({ url, titre, cible, onPage, onPret, secours })
     );
   }
   return (
-    <div className="pp-zone" ref={zoneRef} aria-label={titre}>
+    <div className="pp-zone" ref={zoneRef} aria-label={titre} onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()}>
       {ratios.map((r, i) => (
         <div key={i} className="pp-page" data-n={i + 1} ref={(el) => { pagesRef.current[i] = el; }} style={{ aspectRatio: `1 / ${r}` }} />
       ))}
