@@ -36,8 +36,10 @@ export function exercicesDepuisMarqueurs(marqueurs, pages, mise = {}) {
       for (let garde = 0; garde < 400; garde++) {
         const debut = p === m.p && c === m.c;
         const derniere = p === fin.p && c === fin.c;
-        const y0 = debut ? Math.max(m.y, haut) : haut;
-        const y1 = derniere ? Math.min(fin.y, 1 - bas) : 1 - bas;
+        // un début d'exercice / de correction n'est jamais rogné par la bande : seule la suite d'une zone l'est
+        const y0 = debut ? m.y : haut;
+        const finBande = debut && m.y >= 1 - bas ? 1 : 1 - bas;
+        const y1 = derniere ? Math.min(fin.y, finBande) : finBande;
         if (y1 - y0 >= HAUTEUR_MIN) {
           const s = { d, p, y0: Math.round(y0 * 10000) / 10000, y1: Math.round(y1 * 10000) / 10000 };
           if (cols === 2) { s.x0 = c ? 0.5 : 0; s.x1 = c ? 1 : 0.5; }
@@ -93,6 +95,8 @@ export async function analyserMiseEnPage(pdf) {
   const n = Math.min(pdf.numPages, 8);
   let deux = 0, un = 0;
   const hauts = new Map(), bas = new Map();
+  const candidatsHaut = [], candidatsBas = [];
+  const CONTENU = /^(exercices?|probl[eè]mes?|solutions?|corrig[eé]s?|corrections?|r[eé]ponses?|questions?|partie)\b/i;
   const norm = (t) => t.toLowerCase().replace(/\d+/g, '#').replace(/\s+/g, ' ').trim();
   for (let p = 1; p <= n; p++) {
     const lignes = await lignesPage(pdf, p, 1);
@@ -107,14 +111,28 @@ export async function analyserMiseEnPage(pdf) {
       if (traverse) un += 1; else deux += 1;
     });
     lignes.forEach((l) => {
+      if (l.haut < 0.15) candidatsHaut.push({ cle: norm(l.texte), pos: l.bas, page: p });
+      if (l.bas > 0.85) candidatsBas.push({ cle: norm(l.texte), pos: l.haut, page: p });
       if (l.haut < 0.08) { const k = norm(l.texte); const e = hauts.get(k) || { n: 0, fin: 0 }; e.n += 1; e.fin = Math.max(e.fin, l.bas); hauts.set(k, e); }
       if (l.bas > 0.92) { const k = norm(l.texte); const e = bas.get(k) || { n: 0, debut: 1 }; e.n += 1; e.debut = Math.min(e.debut, l.haut); bas.set(k, e); }
     });
   }
   const seuil = Math.max(2, Math.ceil(n * 0.5));
   let haut = 0, pied = 0;
-  hauts.forEach((e) => { if (e.n >= seuil) haut = Math.max(haut, e.fin + 0.006); });
-  bas.forEach((e) => { if (e.n >= seuil) pied = Math.max(pied, 1 - e.debut + 0.004); });
+  hauts.forEach((e, k) => { if (e.n >= seuil && !CONTENU.test(k)) haut = Math.max(haut, e.fin + 0.006); });
+  bas.forEach((e, k) => { if (e.n >= seuil && !CONTENU.test(k)) pied = Math.max(pied, 1 - e.debut + 0.004); });
+  // Sécurité : si un texte qui ne se répète pas (donc du vrai contenu) tombe dans la bande sur 2 pages ou plus, on réduit la bande
+  const intrus = (zone) => {
+    const par = new Map();
+    zone.forEach(({ cle, pos, page }) => { const e = par.get(cle) || { pages: new Set(), pos: 1 }; e.pages.add(page); e.pos = Math.min(e.pos, pos); par.set(cle, e); });
+    return [...par.values()].filter((e) => e.pages.size >= 2).map((e) => e.pos);
+  };
+  const repetesHaut = new Set([...hauts].filter(([, e]) => e.n >= seuil).map(([k]) => k));
+  const repetesBas = new Set([...bas].filter(([, e]) => e.n >= seuil).map(([k]) => k));
+  const dansHaut = intrus(candidatsHaut.filter((x) => x.pos < haut && !repetesHaut.has(x.cle)));
+  if (dansHaut.length) haut = Math.max(0, Math.min(...dansHaut) - 0.004);
+  const dansBas = intrus(candidatsBas.filter((x) => x.pos > 1 - pied && !repetesBas.has(x.cle)));
+  if (dansBas.length) pied = Math.max(0, 1 - Math.max(...dansBas) - 0.004);
   return {
     col: deux >= 6 && deux > un * 3 ? 2 : 1,
     haut: Math.round(Math.min(0.12, haut) * 1000) / 1000,
@@ -138,7 +156,8 @@ export async function detecterMarqueurs(pdf, d = 's', cfg = {}) {
     const lignes = await lignesPage(pdf, p, cols);
     for (const l of lignes) {
       const s = l.texte;
-      if (l.haut < haut - 0.002 || l.haut > 1 - bas) continue; // en-tête / pied de page
+      // en-tête / pied de page : ignorés, SAUF un titre numéroté (« Exercice 3 », « Solution 3 ») qui compte toujours
+      if ((l.haut < haut - 0.002 || l.haut > 1 - bas) && !/^(exercice|probl[eè]me)\s*n?\s*[°o:]?\s*\d/i.test(s) && !ETIQUETTE.test(s)) continue;
       const yTop = clamp01(l.haut - 0.006);
       const base = { d, p, c: l.col, y: yTop, auto: true, texte: s };
       const strict = s.match(ETIQUETTE);
